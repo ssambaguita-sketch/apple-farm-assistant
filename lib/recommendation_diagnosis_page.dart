@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'diagnosis_page.dart';
 import 'services/farm_api.dart';
 import 'services/recommendation_diagnosis_api.dart';
+import 'services/orchard_selection.dart';
 
 class RecommendationDiagnosisPage extends StatefulWidget {
   const RecommendationDiagnosisPage({super.key});
@@ -14,16 +15,16 @@ class RecommendationDiagnosisPage extends StatefulWidget {
 class _RecommendationDiagnosisPageState extends State<RecommendationDiagnosisPage> {
   final farmApi = FarmApi();
   final diagnosisApi = RecommendationDiagnosisApi();
-  final orchard = TextEditingController(text: 'A과수원');
   List<Map<String, dynamic>> recommendations = [];
   final Map<String, Map<String, dynamic>> preResults = {};
-  final Set<String> loadingThreats = {};
+  final Set<String> loadingKeys = {};
   bool loading = false;
+
+  String _key(String threat, Map<String, dynamic>? zone) => '$threat|${zone?['zone_name'] ?? '전체'}';
 
   Future<void> load() async {
     setState(() => loading = true);
-    final name = orchard.text.trim().isEmpty ? 'A과수원' : orchard.text.trim();
-    final data = await farmApi.dashboard(name);
+    final data = await farmApi.dashboard(OrchardSelection.name);
     final raw = (data['today_recommendations'] as List?) ?? (data['tasks'] as List?) ?? [];
     recommendations = raw
         .whereType<Map>()
@@ -33,35 +34,47 @@ class _RecommendationDiagnosisPageState extends State<RecommendationDiagnosisPag
     if (mounted) setState(() => loading = false);
   }
 
-  Future<void> runPreDiagnosis(Map<String, dynamic> rec) async {
+  Map<String, dynamic>? _primaryZone(Map<String, dynamic> rec) {
+    if (rec['primary_zone_target'] is Map) {
+      return Map<String, dynamic>.from(rec['primary_zone_target'] as Map);
+    }
+    final zones = (rec['zone_targets'] as List?) ?? [];
+    if (zones.isNotEmpty && zones.first is Map) return Map<String, dynamic>.from(zones.first as Map);
+    return null;
+  }
+
+  Future<void> runPreDiagnosis(Map<String, dynamic> rec, [Map<String, dynamic>? zone]) async {
     final threat = '${rec['specific_threat'] ?? ''}'.trim();
     if (threat.isEmpty) return;
-    final name = orchard.text.trim().isEmpty ? 'A과수원' : orchard.text.trim();
-    setState(() => loadingThreats.add(threat));
+    final key = _key(threat, zone);
+    setState(() => loadingKeys.add(key));
     final result = await diagnosisApi.assess(
-      orchard: name,
+      orchard: OrchardSelection.name,
       specificThreat: threat,
       threatType: '${rec['threat_type'] ?? ''}',
+      zoneName: zone?['zone_name']?.toString(),
+      variety: zone?['variety']?.toString(),
     );
     if (!mounted) return;
     setState(() {
-      preResults[threat] = result;
-      loadingThreats.remove(threat);
+      preResults[key] = result;
+      loadingKeys.remove(key);
     });
   }
 
-  void openFieldDiagnosis(String threat) {
+  void openFieldDiagnosis(String threat, Map<String, dynamic>? zone) {
+    final zoneLabel = zone == null ? '' : ' · ${zone['zone_name']} ${zone['variety']}';
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => Scaffold(
-          appBar: AppBar(title: Text('$threat 현장진단')),
+          appBar: AppBar(title: Text('$threat$zoneLabel 현장진단')),
           body: const SafeArea(child: DiagnosisPage()),
         ),
       ),
     );
   }
 
-  Widget _resultCard(String threat, Map<String, dynamic> result) {
+  Widget _resultCard(String threat, Map<String, dynamic>? zone, Map<String, dynamic> result) {
     if (result['error'] != null) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -77,6 +90,7 @@ class _RecommendationDiagnosisPageState extends State<RecommendationDiagnosisPag
         Text('진단엔진 사전판정 · ${result['score'] ?? '-'} / 100 · ${result['level'] ?? '-'}',
             style: const TextStyle(fontWeight: FontWeight.bold)),
         Text('확신도 ${result['confidence'] ?? '-'}'),
+        if (zone != null) Text('대상 구역 ${zone['zone_name']} · ${zone['variety']} · ${zone['tree_count'] ?? 0}주'),
         if (evidence.isNotEmpty) ...[
           const SizedBox(height: 6),
           const Text('현재 근거', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -89,9 +103,33 @@ class _RecommendationDiagnosisPageState extends State<RecommendationDiagnosisPag
         ],
         const SizedBox(height: 8),
         FilledButton.icon(
-          onPressed: () => openFieldDiagnosis(threat),
+          onPressed: () => openFieldDiagnosis(threat, zone),
           icon: const Icon(Icons.camera_alt_outlined),
-          label: Text('$threat 카메라 현장진단'),
+          label: Text(zone == null ? '$threat 카메라 현장진단' : '${zone['zone_name']} 카메라 현장진단'),
+        ),
+      ]),
+    );
+  }
+
+  Widget _zoneChips(Map<String, dynamic> rec) {
+    final zones = ((rec['zone_targets'] as List?) ?? [])
+        .whereType<Map>()
+        .map((x) => Map<String, dynamic>.from(x))
+        .toList();
+    if (zones.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('우선 예찰 구역', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: zones.take(6).map((z) => ActionChip(
+                avatar: Icon((z['zone_priority'] ?? 2) == 1 ? Icons.priority_high : Icons.grid_view_outlined, size: 16),
+                label: Text('${z['zone_name']} · ${z['variety']} · ${z['tree_count'] ?? 0}주'),
+                onPressed: () => runPreDiagnosis(rec, z),
+              )).toList(),
         ),
       ]),
     );
@@ -109,14 +147,9 @@ class _RecommendationDiagnosisPageState extends State<RecommendationDiagnosisPag
       padding: const EdgeInsets.all(16),
       children: [
         const Text('🔎 자동추천 예찰 진단', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-        const Text('오늘 자동추천에서 예측된 구체 위협을 진단엔진으로 사전판정하고, 필요한 경우 바로 카메라 현장진단으로 이어집니다.'),
+        Text('${OrchardSelection.name} · ${OrchardSelection.varieties}'),
+        const Text('예측된 위협을 품종별 구역 단위로 사전판정하고, 우선 구역에서 바로 현장진단으로 이어집니다.'),
         const SizedBox(height: 12),
-        TextField(
-          controller: orchard,
-          decoration: const InputDecoration(labelText: '과수원', border: OutlineInputBorder()),
-          onSubmitted: (_) => load(),
-        ),
-        const SizedBox(height: 8),
         FilledButton.icon(
           onPressed: loading ? null : load,
           icon: const Icon(Icons.refresh),
@@ -125,17 +158,17 @@ class _RecommendationDiagnosisPageState extends State<RecommendationDiagnosisPag
         const SizedBox(height: 12),
         if (loading) const Center(child: CircularProgressIndicator()),
         if (!loading && recommendations.isEmpty)
-          const Card(
-            child: ListTile(
-              leading: Icon(Icons.info_outline),
-              title: Text('현재 구체 예측위협이 없습니다.'),
-              subtitle: Text('오늘 브리핑의 자동추천이 구체 위협 후보를 생성하면 이곳에 표시됩니다.'),
-            ),
-          ),
+          const Card(child: ListTile(
+            leading: Icon(Icons.info_outline),
+            title: Text('현재 구체 예측위협이 없습니다.'),
+            subtitle: Text('오늘 브리핑의 자동추천이 구체 위협 후보를 생성하면 이곳에 표시됩니다.'),
+          )),
         ...recommendations.map((rec) {
           final threat = '${rec['specific_threat']}';
           final candidates = (rec['specific_threat_candidates'] as List?) ?? [];
-          final result = preResults[threat];
+          final primary = _primaryZone(rec);
+          final key = _key(threat, primary);
+          final result = preResults[key];
           return Card(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               ListTile(
@@ -156,26 +189,29 @@ class _RecommendationDiagnosisPageState extends State<RecommendationDiagnosisPag
                     }).toList(),
                   ),
                 ),
+              _zoneChips(rec),
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                 child: FilledButton.tonalIcon(
-                  onPressed: loadingThreats.contains(threat) ? null : () => runPreDiagnosis(rec),
+                  onPressed: loadingKeys.contains(key) ? null : () => runPreDiagnosis(rec, primary),
                   icon: const Icon(Icons.biotech_outlined),
-                  label: Text(loadingThreats.contains(threat) ? '진단엔진 실행 중...' : '$threat 사전진단 실행'),
+                  label: Text(loadingKeys.contains(key)
+                      ? '진단엔진 실행 중...'
+                      : primary == null
+                          ? '$threat 사전진단 실행'
+                          : '${primary['zone_name']} 우선 사전진단'),
                 ),
               ),
-              if (result != null) _resultCard(threat, result),
+              if (result != null) _resultCard(threat, primary, result),
             ]),
           );
         }),
         const SizedBox(height: 12),
-        const Card(
-          child: ListTile(
-            leading: Icon(Icons.verified_user_outlined),
-            title: Text('예측과 진단은 구분합니다'),
-            subtitle: Text('자동추천은 예찰 우선순위를 정하고, 진단엔진은 현재 근거를 다시 평가합니다. 병해·결핍의 확정은 현장 증상과 필요한 검사 결과를 함께 확인해야 합니다.'),
-          ),
-        ),
+        const Card(child: ListTile(
+          leading: Icon(Icons.verified_user_outlined),
+          title: Text('구역 우선순위도 확진이 아닙니다'),
+          subtitle: Text('품종·나무 수·생육단계로 먼저 볼 구역을 정하는 기능입니다. 실제 병해·해충·결핍 판정은 현장 증거와 필요한 검사 결과로 다시 확인합니다.'),
+        )),
       ],
     );
   }
