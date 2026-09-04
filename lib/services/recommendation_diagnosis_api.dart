@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'farm_api.dart';
+import 'orchard_selection.dart';
 
 class RecommendationDiagnosisApi {
   Future<Map<String, dynamic>> assess({
@@ -8,13 +9,14 @@ class RecommendationDiagnosisApi {
     required String specificThreat,
     required String threatType,
   }) async {
+    final selected = OrchardSelection.name.trim().isNotEmpty ? OrchardSelection.name : orchard;
     try {
       final r = await http
           .post(
             Uri.parse('${FarmApi.baseUrl}/api/diagnosis/recommendation-assess'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
-              'orchard': orchard,
+              'orchard': selected,
               'specific_threat': specificThreat,
               'threat_type': threatType,
             }),
