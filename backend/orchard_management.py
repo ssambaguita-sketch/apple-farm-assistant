@@ -16,26 +16,37 @@ class OrchardUpdateIn(BaseModel):
     growth_stage: str = ""
 
 
-def _cascade_orchard_name(c, old_name: str, new_name: str):
+def _run_secondary_update(statement):
+    """Run a non-critical related-table update in its own transaction.
+
+    PostgreSQL marks a transaction as failed after a SQL error. Keeping each
+    optional cascade in a separate transaction prevents a missing/legacy
+    secondary table from poisoning the orchard update transaction itself.
+    """
+    try:
+        with main.engine.begin() as c:
+            c.execute(statement)
+    except Exception:
+        # Secondary history data must never block editing the orchard itself.
+        pass
+
+
+def _cascade_orchard_name(old_name: str, new_name: str):
     """Keep orchard-linked records attached when an orchard is renamed."""
     if not old_name or old_name == new_name:
         return
 
     for table in (main.tasks, main.observations, main.finance):
-        try:
-            if "orchard" in table.c:
-                c.execute(
-                    update(table)
-                    .where(table.c.orchard == old_name)
-                    .values(orchard=new_name)
-                )
-        except Exception:
-            # A secondary history table must never block editing the orchard itself.
-            pass
+        if "orchard" in table.c:
+            _run_secondary_update(
+                update(table)
+                .where(table.c.orchard == old_name)
+                .values(orchard=new_name)
+            )
 
     try:
         import orchard_zones
-        c.execute(
+        _run_secondary_update(
             update(orchard_zones.orchard_zones)
             .where(orchard_zones.orchard_zones.c.orchard == old_name)
             .values(orchard=new_name)
@@ -45,7 +56,7 @@ def _cascade_orchard_name(c, old_name: str, new_name: str):
 
     try:
         import weed_intelligence
-        c.execute(
+        _run_secondary_update(
             update(weed_intelligence.weed_history)
             .where(weed_intelligence.weed_history.c.orchard == old_name)
             .values(orchard=new_name)
@@ -62,8 +73,11 @@ def update_orchard(orchard_id: int, x: OrchardUpdateIn):
 
     varieties = [v.strip() for v in x.varieties if v.strip()]
     variety_text = ", ".join(dict.fromkeys(varieties)) or "후지"
+    old_name = ""
 
     try:
+        # Commit the primary orchard edit first. Optional cascade failures must
+        # not roll this transaction back.
         with main.engine.begin() as c:
             row = c.execute(
                 select(main.orchards).where(main.orchards.c.id == orchard_id)
@@ -92,13 +106,14 @@ def update_orchard(orchard_id: int, x: OrchardUpdateIn):
                     growth_stage=x.growth_stage.strip(),
                 )
             )
-            _cascade_orchard_name(c, old_name, name)
     except HTTPException:
         raise
     except IntegrityError:
         raise HTTPException(409, "이미 존재하는 과수원 이름입니다")
     except Exception as exc:
         raise HTTPException(500, f"과수원 수정 중 서버 오류: {type(exc).__name__}")
+
+    _cascade_orchard_name(old_name, name)
 
     return {
         "ok": True,
