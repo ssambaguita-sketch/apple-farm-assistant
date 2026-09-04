@@ -6,6 +6,7 @@ import specific_threats  # refines broad threats into concrete seasonal scouting
 import recommendation_diagnosis  # runs diagnosis pre-checks for recommendation candidates
 import behavior_coach  # non-diagnostic behavioral screening and coaching
 import orchard_management  # multi-orchard and multi-variety management
+import orchard_zones  # per-variety orchard zones and tree counts
 
 app = base_app.app
-app.version = "5.3.0"
+app.version = "5.4.0-dev"
