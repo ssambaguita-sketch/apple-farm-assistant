@@ -13,9 +13,10 @@ class FarmApi {
 
   static Future<void> initialize() async {
     final p = await SharedPreferences.getInstance();
-    _baseUrl = (p.getString(_key) ?? _defaultBaseUrl)
-        .trim()
-        .replaceAll(RegExp(r'/+$'), '');
+    final saved = (p.getString(_key) ?? _defaultBaseUrl).trim();
+    _baseUrl = saved.contains('10.0.2.2') || saved.isEmpty
+        ? _defaultBaseUrl
+        : saved.replaceAll(RegExp(r'/+$'), '');
   }
 
   static Future<void> setBaseUrl(String value) async {
@@ -27,9 +28,7 @@ class FarmApi {
 
   Future<bool> health() async {
     try {
-      final r = await http
-          .get(Uri.parse('$_baseUrl/health'))
-          .timeout(const Duration(seconds: 20));
+      final r = await http.get(Uri.parse('$_baseUrl/health')).timeout(const Duration(seconds: 25));
       return r.statusCode == 200;
     } catch (_) {
       return false;
@@ -47,11 +46,8 @@ class FarmApi {
       'coach': false,
       'messages': <String>[],
     };
-
     try {
-      final r = await http
-          .get(Uri.parse('$_baseUrl/health'))
-          .timeout(const Duration(seconds: 25));
+      final r = await http.get(Uri.parse('$_baseUrl/health')).timeout(const Duration(seconds: 25));
       if (r.statusCode == 200) {
         final j = Map<String, dynamic>.from(jsonDecode(r.body));
         result['server'] = j['ok'] == true;
@@ -60,13 +56,11 @@ class FarmApi {
         result['server_version'] = j['version'];
         result['database_type'] = j['database'];
       }
-    } catch (e) {
+    } catch (_) {
       (result['messages'] as List<String>).add('서버 상태 확인 실패');
     }
-
     try {
-      final u = Uri.parse('$_baseUrl/api/weather')
-          .replace(queryParameters: {'orchard': orchard});
+      final u = Uri.parse('$_baseUrl/api/weather').replace(queryParameters: {'orchard': orchard});
       final r = await http.get(u).timeout(const Duration(seconds: 25));
       if (r.statusCode == 200) {
         final j = Map<String, dynamic>.from(jsonDecode(r.body));
@@ -78,10 +72,8 @@ class FarmApi {
     } catch (_) {
       (result['messages'] as List<String>).add('날씨 API 확인 실패');
     }
-
     try {
-      final u = Uri.parse('$_baseUrl/api/tasks')
-          .replace(queryParameters: {'orchard': orchard});
+      final u = Uri.parse('$_baseUrl/api/tasks').replace(queryParameters: {'orchard': orchard});
       final r = await http.get(u).timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) {
         result['tasks'] = true;
@@ -91,17 +83,32 @@ class FarmApi {
     } catch (_) {
       (result['messages'] as List<String>).add('작업 API 확인 실패');
     }
-
     try {
-      final r = await http
-          .get(Uri.parse('$_baseUrl/api/coach'))
-          .timeout(const Duration(seconds: 20));
+      final r = await http.get(Uri.parse('$_baseUrl/api/coach')).timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) result['coach'] = true;
     } catch (_) {
       (result['messages'] as List<String>).add('코치 API 확인 실패');
     }
-
     return result;
+  }
+
+  Future<bool> saveOrchardLocation({
+    required String orchard,
+    required double lat,
+    required double lon,
+  }) async {
+    try {
+      final r = await http
+          .post(
+            Uri.parse('$_baseUrl/api/orchards/location'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'orchard': orchard, 'lat': lat, 'lon': lon}),
+          )
+          .timeout(const Duration(seconds: 25));
+      return r.statusCode >= 200 && r.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
   }
 
   Map<String, dynamic> _demoDashboard(String orchard) => {
@@ -111,85 +118,46 @@ class FarmApi {
         'profit': 0,
         'weather_source': 'demo',
         'weather_warning': '서버 또는 실제 기상 데이터에 연결되지 않았습니다.',
-        'tasks': [
-          {'title': '과수원 상태 확인', 'scheduled_at': '오늘', 'priority': 1},
-          {'title': '잡초 및 병해충 예찰', 'scheduled_at': '오전', 'priority': 2}
-        ],
-        'best_work_times': [
-          {
-            'time': '08:00',
-            'temp': 22,
-            'wind': 1.5,
-            'rain_probability': 10,
-            'grade': '참고',
-            'score': 80
-          },
-          {
-            'time': '17:00',
-            'temp': 25,
-            'wind': 2.0,
-            'rain_probability': 20,
-            'grade': '참고',
-            'score': 75
-          }
-        ]
+        'tasks': [],
+        'best_work_times': []
       };
 
   Future<Map<String, dynamic>> dashboard(String orchard) async {
     try {
-      final u = Uri.parse('$_baseUrl/api/dashboard')
-          .replace(queryParameters: {'orchard': orchard});
-      final r = await http.get(u).timeout(const Duration(seconds: 20));
-      if (r.statusCode == 200) {
-        return Map<String, dynamic>.from(jsonDecode(r.body));
-      }
+      final u = Uri.parse('$_baseUrl/api/dashboard').replace(queryParameters: {'orchard': orchard});
+      final r = await http.get(u).timeout(const Duration(seconds: 25));
+      if (r.statusCode == 200) return Map<String, dynamic>.from(jsonDecode(r.body));
     } catch (_) {}
     return _demoDashboard(orchard);
   }
 
   Future<List<dynamic>> orchards() async {
     try {
-      final r = await http
-          .get(Uri.parse('$_baseUrl/api/orchards'))
-          .timeout(const Duration(seconds: 20));
+      final r = await http.get(Uri.parse('$_baseUrl/api/orchards')).timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) return jsonDecode(r.body);
     } catch (_) {}
-    return [
-      {'name': 'A과수원', 'variety': '후지', 'offline_mode': true}
-    ];
+    return [];
   }
 
   Future<List<dynamic>> tasks(String orchard) async {
     try {
-      final u = Uri.parse('$_baseUrl/api/tasks')
-          .replace(queryParameters: {'orchard': orchard});
+      final u = Uri.parse('$_baseUrl/api/tasks').replace(queryParameters: {'orchard': orchard});
       final r = await http.get(u).timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) return jsonDecode(r.body);
     } catch (_) {}
     return [];
   }
 
-  Future<bool> addTask({
-    required String orchard,
-    required String title,
-    String category = '일반',
-    int priority = 2,
-    String? scheduledAt,
-  }) async {
+  Future<bool> addTask({required String orchard, required String title, String category = '일반', int priority = 2, String? scheduledAt}) async {
     try {
       final r = await http
-          .post(
-            Uri.parse('$_baseUrl/api/tasks'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'orchard': orchard,
-              'title': title,
-              'category': category,
-              'priority': priority,
-              'scheduled_at': scheduledAt,
-            }),
-          )
-          .timeout(const Duration(seconds: 20));
+          .post(Uri.parse('$_baseUrl/api/tasks'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({
+        'orchard': orchard,
+        'title': title,
+        'category': category,
+        'priority': priority,
+        'scheduled_at': scheduledAt,
+      })).timeout(const Duration(seconds: 20));
       return r.statusCode >= 200 && r.statusCode < 300;
     } catch (_) {
       return false;
@@ -198,9 +166,7 @@ class FarmApi {
 
   Future<bool> completeTask(int taskId) async {
     try {
-      final r = await http
-          .post(Uri.parse('$_baseUrl/api/tasks/$taskId/complete'))
-          .timeout(const Duration(seconds: 20));
+      final r = await http.post(Uri.parse('$_baseUrl/api/tasks/$taskId/complete')).timeout(const Duration(seconds: 20));
       return r.statusCode >= 200 && r.statusCode < 300;
     } catch (_) {
       return false;
@@ -209,12 +175,8 @@ class FarmApi {
 
   Future<Map<String, dynamic>> coach() async {
     try {
-      final r = await http
-          .get(Uri.parse('$_baseUrl/api/coach'))
-          .timeout(const Duration(seconds: 20));
-      if (r.statusCode == 200) {
-        return Map<String, dynamic>.from(jsonDecode(r.body));
-      }
+      final r = await http.get(Uri.parse('$_baseUrl/api/coach')).timeout(const Duration(seconds: 20));
+      if (r.statusCode == 200) return Map<String, dynamic>.from(jsonDecode(r.body));
     } catch (_) {}
     return {
       'offline_mode': true,
@@ -223,38 +185,21 @@ class FarmApi {
         {'hour': 9, 'samples': 0, 'score': 80},
         {'hour': 16, 'samples': 0, 'score': 76}
       ],
-      'policy': '오프라인 기본값입니다. 서버 연결 후 실제 작업기록으로 개인화됩니다.'
+      'policy': '오프라인 기본값입니다.'
     };
   }
 
-  Future<Map<String, dynamic>> survivorAdvice(
-      Map<String, dynamic> data) async {
+  Future<Map<String, dynamic>> survivorAdvice(Map<String, dynamic> data) async {
     try {
       final r = await http
-          .post(
-            Uri.parse('$_baseUrl/api/weeds/survivor-advice'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(data),
-          )
+          .post(Uri.parse('$_baseUrl/api/weeds/survivor-advice'), headers: {'Content-Type': 'application/json'}, body: jsonEncode(data))
           .timeout(const Duration(seconds: 20));
-      if (r.statusCode == 200) {
-        return Map<String, dynamic>.from(jsonDecode(r.body));
-      }
+      if (r.statusCode == 200) return Map<String, dynamic>.from(jsonDecode(r.body));
     } catch (_) {}
     return {
       'offline_mode': true,
-      'possible_causes': [
-        '잡초 종류 오인 가능성',
-        '처리 시 잡초가 너무 자랐을 가능성',
-        '살포 균일도 문제 가능성',
-        '같은 작용기작 반복 가능성'
-      ],
-      'actions': [
-        '살아남은 잡초의 종류와 생육단계를 다시 확인하세요.',
-        '살포 당시 비·바람·노즐·압력·사각지대를 점검하세요.',
-        '농촌진흥청 PSIS에서 사과 등록 여부와 대상 잡초, 사용시기, 작용기작을 확인하세요.',
-        '임의 증량이나 짧은 간격의 반복 살포는 피하고 예초·멀칭 같은 비화학적 방법도 함께 검토하세요.'
-      ]
+      'possible_causes': ['서버 연결 실패'],
+      'actions': ['네트워크 연결 후 다시 시도하세요.']
     };
   }
 }
