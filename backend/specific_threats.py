@@ -51,6 +51,29 @@ ENV_BY_MONTH = {
     10: "강우·저온 수확 스트레스",
 }
 
+# 품종은 지역·대목·수세에 따라 실제 숙기가 달라질 수 있으므로 '보정 프로필'로만 사용한다.
+VARIETY_PROFILE = {
+    "루비에스": {"group": "조생", "harvest_months": [8], "fruit_risk_months": [7, 8], "focus": "조기 성숙·수확 전 과실상태와 일소·낙과를 앞당겨 확인"},
+    "홍로": {"group": "조중생", "harvest_months": [8, 9], "fruit_risk_months": [8, 9], "focus": "착색·성숙이 빨라지는 시기에 과실 병반·해충 피해·낙과를 집중 확인"},
+    "아리수": {"group": "중생", "harvest_months": [9], "fruit_risk_months": [8, 9], "focus": "9월 수확 준비를 고려해 8~9월 과실 병반·착색·낙과를 우선 확인"},
+    "감홍": {"group": "중만생", "harvest_months": [9, 10], "fruit_risk_months": [8, 9, 10], "focus": "후반 비대·성숙기에 과실 병반과 영양 불균형·착색 상태를 함께 확인"},
+    "시나노골드": {"group": "만생", "harvest_months": [10], "fruit_risk_months": [9, 10], "focus": "늦은 성숙기까지 잎·과실 건전성과 강풍·저온 수확 스트레스를 추적"},
+    "후지": {"group": "만생", "harvest_months": [10, 11], "fruit_risk_months": [9, 10, 11], "focus": "늦은 수확까지 과실 병해·낙과·저온 및 수확 전 품질을 지속 확인"},
+}
+
+
+def _orchard_profile(orchard_name: str):
+    try:
+        with main.engine.connect() as c:
+            row = c.execute(select(main.orchards).where(main.orchards.c.name == orchard_name)).mappings().first()
+        if not row:
+            return ["후지"], "", ""
+        raw = str(row.get("variety") or "후지")
+        varieties = [v.strip() for v in raw.split(",") if v.strip()] or ["후지"]
+        return varieties, str(row.get("growth_stage") or ""), raw
+    except Exception:
+        return ["후지"], "", "후지"
+
 
 def _latest_observation_text(orchard_name: str) -> str:
     try:
@@ -66,29 +89,50 @@ def _latest_observation_text(orchard_name: str) -> str:
         return ""
 
 
-def _rank_diseases(month: int, context: dict):
+def _variety_boost(name: str, month: int, varieties: list[str], kind: str) -> int:
+    boost = 0
+    for variety in varieties:
+        profile = VARIETY_PROFILE.get(variety)
+        if not profile:
+            continue
+        fruit_months = profile["fruit_risk_months"]
+        harvest_months = profile["harvest_months"]
+        if month in fruit_months:
+            if kind == "disease" and name in {"탄저병", "겹무늬썩음병", "과실 부패성 병해"}:
+                boost = max(boost, 10)
+            if kind == "pest" and name in {"복숭아순나방", "노린재류"}:
+                boost = max(boost, 8)
+        if month in harvest_months:
+            if kind == "disease" and name in {"탄저병", "과실 부패성 병해"}:
+                boost = max(boost, 12)
+            if kind == "pest" and name in {"복숭아순나방", "노린재류"}:
+                boost = max(boost, 10)
+    return boost
+
+
+def _rank_diseases(month: int, context: dict, varieties: list[str]):
     candidates = [list(x) for x in DISEASE_BY_MONTH.get(month, [])]
     rain = float(context.get("forecast_max_rain_probability_pct") or 0)
-    if rain >= 60:
-        for c in candidates:
-            if c[0] in {"탄저병", "갈색무늬병", "겹무늬썩음병", "점무늬낙엽병"}:
-                c[1] += 12
+    for c in candidates:
+        if rain >= 60 and c[0] in {"탄저병", "갈색무늬병", "겹무늬썩음병", "점무늬낙엽병"}:
+            c[1] += 12
+        c[1] += _variety_boost(c[0], month, varieties, "disease")
     return sorted(candidates, key=lambda x: x[1], reverse=True)
 
 
-def _rank_pests(month: int, context: dict):
+def _rank_pests(month: int, context: dict, varieties: list[str]):
     candidates = [list(x) for x in PEST_BY_MONTH.get(month, [])]
     temp = float(context.get("forecast_max_temp_c") or 0)
-    if temp >= 27:
-        for c in candidates:
-            if c[0] in {"사과응애", "복숭아순나방"}:
-                c[1] += 6
+    for c in candidates:
+        if temp >= 27 and c[0] in {"사과응애", "복숭아순나방"}:
+            c[1] += 6
+        c[1] += _variety_boost(c[0], month, varieties, "pest")
     return sorted(candidates, key=lambda x: x[1], reverse=True)
 
 
-def _rank_nutrition(month: int, observation_text: str):
+def _rank_nutrition(month: int, observation_text: str, growth_stage: str):
     candidates = [list(x) for x in NUTRITION_BY_MONTH.get(month, [])]
-    text = observation_text
+    text = f"{observation_text} {growth_stage}"
     for c in candidates:
         name = c[0]
         if name == "마그네슘 결핍" and any(k in text for k in ("마그네슘", "오래된잎", "잎맥사이황화", "잎맥 사이 황화")):
@@ -100,7 +144,7 @@ def _rank_nutrition(month: int, observation_text: str):
     return sorted(candidates, key=lambda x: x[1], reverse=True)
 
 
-def _specific_for(rec: dict, month: int, context: dict, obs_text: str):
+def _specific_for(rec: dict, month: int, context: dict, obs_text: str, varieties: list[str], growth_stage: str):
     threat_type = str(rec.get("threat_type") or "")
     category = str(rec.get("annual_category") or "")
     title = str(rec.get("title") or "")
@@ -108,24 +152,24 @@ def _specific_for(rec: dict, month: int, context: dict, obs_text: str):
     text = f"{title} {reason}"
 
     if threat_type == "disease" or category == "병해" or "병해" in text:
-        ranked = _rank_diseases(month, context)
+        ranked = _rank_diseases(month, context, varieties)
         if ranked:
-            return ranked[0][0], ranked, "시기·강수조건 기반 병해 예찰 후보"
+            return ranked[0][0], ranked, "시기·강수조건·품종 숙기 보정 기반 병해 예찰 후보"
 
     if threat_type == "pest" or category == "해충" or any(k in text for k in ("해충", "응애", "나방", "진딧물")):
-        ranked = _rank_pests(month, context)
+        ranked = _rank_pests(month, context, varieties)
         if ranked:
-            return ranked[0][0], ranked, "시기·기온조건 기반 해충 예찰 후보"
+            return ranked[0][0], ranked, "시기·기온조건·품종 숙기 보정 기반 해충 예찰 후보"
 
     if threat_type == "nutrition" or category == "영양결핍" or any(k in text for k in ("결핍", "황화", "영양")):
-        ranked = _rank_nutrition(month, obs_text)
+        ranked = _rank_nutrition(month, obs_text, growth_stage)
         if ranked:
-            return ranked[0][0], ranked, "생육시기 + 최근 관찰기록 기반 결핍 예찰 후보"
+            return ranked[0][0], ranked, "생육시기 + 현재 생육단계 + 최근 관찰기록 기반 결핍 예찰 후보"
 
     if threat_type == "environment" or category == "환경위협":
         name = ENV_BY_MONTH.get(month)
         if name:
-            return name, [[name, 70]], "시기·기상조건 기반 환경위협 후보"
+            return name, [[name, 70]], "시기·기상조건·품종 숙기 보정 기반 환경위협 후보"
 
     return None, [], None
 
@@ -134,13 +178,20 @@ def build_today_recommendations_with_specific_threats(orchard_name: str):
     recs, context, confidence = _previous_build(orchard_name)
     month = int(context.get("annual_month") or datetime.now(main.TZ).month)
     obs_text = _latest_observation_text(orchard_name)
+    varieties, growth_stage, variety_text = _orchard_profile(orchard_name)
     out = []
+
+    profiles = [VARIETY_PROFILE[v] for v in varieties if v in VARIETY_PROFILE]
+    context["orchard_varieties"] = varieties
+    context["orchard_variety_text"] = variety_text
+    context["variety_maturity_groups"] = list(dict.fromkeys(p["group"] for p in profiles))
+    context["variety_focus"] = [p["focus"] for p in profiles]
+    context["growth_stage"] = growth_stage or context.get("growth_stage")
 
     for raw in recs:
         rec = dict(raw)
-        specific, ranked, basis = _specific_for(rec, month, context, obs_text)
+        specific, ranked, basis = _specific_for(rec, month, context, obs_text, varieties, growth_stage)
         if specific:
-            # generic 위협 라벨은 남기되, 실제 사용자가 먼저 읽는 제목에는 구체 후보명을 표시한다.
             old = str(rec.get("title") or "")
             body = old
             if "] " in old:
@@ -152,8 +203,10 @@ def build_today_recommendations_with_specific_threats(orchard_name: str):
             ]
             rec["prediction_basis"] = basis
             rec["prediction_status"] = "예찰후보"
+            rec["variety_context"] = varieties
             rec["reason"] = (
                 f"{rec.get('reason', '')} 구체 후보 '{specific}'은 {basis}로 우선순위를 올린 것이며 확진이 아닙니다. "
+                f"현재 과수원 품종({', '.join(varieties)})과 생육단계({growth_stage or '미등록'})를 보정값으로 사용했습니다. "
                 "현장 증상·사진·발생범위를 확인해 판정을 갱신하세요."
             ).strip()
         out.append(rec)
