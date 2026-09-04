@@ -3,6 +3,7 @@ from typing import List, Optional
 from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 
 import app as main
 
@@ -15,37 +16,99 @@ class OrchardUpdateIn(BaseModel):
     growth_stage: str = ""
 
 
+def _cascade_orchard_name(c, old_name: str, new_name: str):
+    """Keep orchard-linked records attached when an orchard is renamed."""
+    if not old_name or old_name == new_name:
+        return
+
+    for table in (main.tasks, main.observations, main.finance):
+        try:
+            if "orchard" in table.c:
+                c.execute(
+                    update(table)
+                    .where(table.c.orchard == old_name)
+                    .values(orchard=new_name)
+                )
+        except Exception:
+            # A secondary history table must never block editing the orchard itself.
+            pass
+
+    try:
+        import orchard_zones
+        c.execute(
+            update(orchard_zones.orchard_zones)
+            .where(orchard_zones.orchard_zones.c.orchard == old_name)
+            .values(orchard=new_name)
+        )
+    except Exception:
+        pass
+
+    try:
+        import weed_intelligence
+        c.execute(
+            update(weed_intelligence.weed_history)
+            .where(weed_intelligence.weed_history.c.orchard == old_name)
+            .values(orchard=new_name)
+        )
+    except Exception:
+        pass
+
+
 @main.app.put("/api/orchards/{orchard_id}")
 def update_orchard(orchard_id: int, x: OrchardUpdateIn):
     name = x.name.strip()
     if not name:
         raise HTTPException(400, "과수원 이름이 필요합니다")
+
     varieties = [v.strip() for v in x.varieties if v.strip()]
     variety_text = ", ".join(dict.fromkeys(varieties)) or "후지"
-    with main.engine.begin() as c:
-        row = c.execute(select(main.orchards).where(main.orchards.c.id == orchard_id)).mappings().first()
-        if not row:
-            raise HTTPException(404, "과수원을 찾을 수 없습니다")
-        duplicate = c.execute(
-            select(main.orchards.c.id).where(
-                main.orchards.c.name == name,
-                main.orchards.c.id != orchard_id,
+
+    try:
+        with main.engine.begin() as c:
+            row = c.execute(
+                select(main.orchards).where(main.orchards.c.id == orchard_id)
+            ).mappings().first()
+            if not row:
+                raise HTTPException(404, "과수원을 찾을 수 없습니다")
+
+            duplicate = c.execute(
+                select(main.orchards.c.id).where(
+                    main.orchards.c.name == name,
+                    main.orchards.c.id != orchard_id,
+                )
+            ).first()
+            if duplicate:
+                raise HTTPException(409, "이미 존재하는 과수원 이름입니다")
+
+            old_name = str(row.get("name") or "")
+            c.execute(
+                update(main.orchards)
+                .where(main.orchards.c.id == orchard_id)
+                .values(
+                    name=name,
+                    variety=variety_text,
+                    area_m2=max(0, x.area_m2),
+                    tree_count=max(0, x.tree_count),
+                    growth_stage=x.growth_stage.strip(),
+                )
             )
-        ).first()
-        if duplicate:
-            raise HTTPException(409, "이미 존재하는 과수원 이름입니다")
-        c.execute(
-            update(main.orchards)
-            .where(main.orchards.c.id == orchard_id)
-            .values(
-                name=name,
-                variety=variety_text,
-                area_m2=max(0, x.area_m2),
-                tree_count=max(0, x.tree_count),
-                growth_stage=x.growth_stage.strip(),
-            )
-        )
-    return {"ok": True, "id": orchard_id, "name": name, "varieties": varieties or ["후지"]}
+            _cascade_orchard_name(c, old_name, name)
+    except HTTPException:
+        raise
+    except IntegrityError:
+        raise HTTPException(409, "이미 존재하는 과수원 이름입니다")
+    except Exception as exc:
+        raise HTTPException(500, f"과수원 수정 중 서버 오류: {type(exc).__name__}")
+
+    return {
+        "ok": True,
+        "id": orchard_id,
+        "name": name,
+        "varieties": varieties or ["후지"],
+        "area_m2": max(0, x.area_m2),
+        "tree_count": max(0, x.tree_count),
+        "growth_stage": x.growth_stage.strip(),
+    }
 
 
 class OrchardCreateMultiIn(BaseModel):
@@ -85,6 +148,6 @@ def create_multi_orchard(x: OrchardCreateMultiIn):
                 created_at=main.now_iso(),
             ))
             orchard_id = result.inserted_primary_key[0]
-    except main.IntegrityError:
+    except IntegrityError:
         raise HTTPException(409, "이미 존재하는 과수원 이름입니다")
     return {"ok": True, "id": orchard_id, "name": name, "varieties": varieties or ["후지"]}
