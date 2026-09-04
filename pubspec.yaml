@@ -1,7 +1,7 @@
 name: apple_farm_assistant
 description: Final Apple Farm Assistant
 publish_to: 'none'
-version: 3.0.0+31
+version: 3.0.0+32
 environment:
   sdk: '>=3.3.0 <4.0.0'
 dependencies:
