@@ -1,16 +1,20 @@
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel
 from sqlalchemy import select, desc
 
 import main
 import specific_threats
+import orchard_zones
 
 
 class RecommendationDiagnosisIn(BaseModel):
     orchard: str = "A과수원"
     specific_threat: str
     threat_type: str = ""
+    zone_name: Optional[str] = None
+    variety: Optional[str] = None
 
 
 def _level(score: int) -> str:
@@ -39,20 +43,20 @@ def _recent_text(orchard_name: str) -> tuple[str, int]:
         return "", 0
 
 
-def _seasonal_score(name: str, month: int, context: dict, obs_text: str) -> tuple[int, list[str]]:
+def _seasonal_score(name: str, month: int, context: dict, obs_text: str, varieties: list[str], growth_stage: str) -> tuple[int, list[str]]:
     evidence = []
 
-    for candidate in specific_threats._rank_diseases(month, context):
+    for candidate in specific_threats._rank_diseases(month, context, varieties):
         if candidate[0] == name:
             evidence.append(f"{month}월 병해 발생시기 후보")
             return int(min(100, candidate[1])), evidence
 
-    for candidate in specific_threats._rank_pests(month, context):
+    for candidate in specific_threats._rank_pests(month, context, varieties):
         if candidate[0] == name:
             evidence.append(f"{month}월 해충 발생시기 후보")
             return int(min(100, candidate[1])), evidence
 
-    for candidate in specific_threats._rank_nutrition(month, obs_text):
+    for candidate in specific_threats._rank_nutrition(month, obs_text, growth_stage):
         if candidate[0] == name:
             evidence.append(f"{month}월 생육단계의 영양결핍 후보")
             if len(candidate) >= 3:
@@ -67,6 +71,23 @@ def _seasonal_score(name: str, month: int, context: dict, obs_text: str) -> tupl
     return 30, ["자동추천에서 전달된 예찰 후보"]
 
 
+def _zone_context(orchard_name: str, zone_name: Optional[str], explicit_variety: Optional[str]):
+    orchard_varieties, orchard_stage, _ = specific_threats._orchard_profile(orchard_name)
+    if explicit_variety and explicit_variety.strip():
+        orchard_varieties = [explicit_variety.strip()]
+
+    zone = None
+    if zone_name and zone_name.strip():
+        for item in orchard_zones.zone_targets_for_orchard(orchard_name):
+            if str(item.get("zone_name") or "") == zone_name.strip():
+                zone = item
+                break
+    if zone:
+        orchard_varieties = [str(zone.get("variety") or orchard_varieties[0]).strip()]
+        orchard_stage = str(zone.get("growth_stage") or orchard_stage).strip()
+    return orchard_varieties, orchard_stage, zone
+
+
 def assess_recommendation_candidate(x: RecommendationDiagnosisIn):
     orchard_name = x.orchard.strip() or "A과수원"
     threat = x.specific_threat.strip()
@@ -78,14 +99,20 @@ def assess_recommendation_candidate(x: RecommendationDiagnosisIn):
     max_pop = max([float(w.get("rain_probability", 0) or 0) for w in weather], default=0)
 
     obs_text, recent_risk = _recent_text(orchard_name)
+    varieties, growth_stage, zone = _zone_context(orchard_name, x.zone_name, x.variety)
     base, evidence = _seasonal_score(threat, month, {
         "forecast_max_temp_c": max_temp,
         "forecast_max_humidity_pct": max_humidity,
         "forecast_max_rain_probability_pct": max_pop,
-    }, obs_text)
+    }, obs_text, varieties, growth_stage)
 
     score = base
     threat_type = (x.threat_type or "").strip()
+
+    if zone:
+        evidence.append(f"예찰 구역 {zone.get('zone_name')} · {zone.get('variety')} · {zone.get('tree_count', 0)}주")
+        if str(zone.get("growth_stage") or "").strip():
+            evidence.append(f"구역 생육단계 {zone.get('growth_stage')}")
 
     if threat_type == "disease" or any(k in threat for k in ("병", "썩음", "무늬")):
         if max_humidity >= 85:
@@ -119,6 +146,8 @@ def assess_recommendation_candidate(x: RecommendationDiagnosisIn):
         confidence_points += 25
     if recent_risk > 0:
         confidence_points += 15
+    if zone:
+        confidence_points += 10
     if score >= 70:
         confidence_points += 10
     confidence = "높음" if confidence_points >= 70 else "보통" if confidence_points >= 45 else "낮음"
@@ -126,15 +155,14 @@ def assess_recommendation_candidate(x: RecommendationDiagnosisIn):
     missing = []
     if source != "kma":
         missing.append("실제 KMA 기상자료")
-    missing.extend([
-        "현장 카메라 사진",
-        "증상 부위·분포·확대 사진",
-    ])
+    missing.extend(["현장 카메라 사진", "증상 부위·분포·확대 사진"])
     if threat_type == "nutrition" or "결핍" in threat or "불균형" in threat:
         missing.append("토양검정 또는 엽분석")
 
     return {
         "orchard": orchard_name,
+        "zone": zone,
+        "varieties": varieties,
         "candidate": threat,
         "diagnosis_stage": "자동추천 사전진단",
         "score": score,
@@ -145,6 +173,7 @@ def assess_recommendation_candidate(x: RecommendationDiagnosisIn):
         "camera_confirmation_required": True,
         "context": {
             "month": month,
+            "growth_stage": growth_stage,
             "weather_source": source,
             "weather_warning": warning,
             "forecast_max_temp_c": round(max_temp, 1),
@@ -152,7 +181,7 @@ def assess_recommendation_candidate(x: RecommendationDiagnosisIn):
             "forecast_max_rain_probability_pct": round(max_pop, 0),
             "recent_max_risk": recent_risk,
         },
-        "policy": "사전진단은 시기·기상·최근 기록으로 예찰 우선순위를 계산한 것이며 확진이 아닙니다. 카메라 현장증거와 필요 시 토양·엽 분석으로 다시 검증합니다.",
+        "policy": "사전진단은 시기·기상·최근 기록·품종·구역 생육단계로 예찰 우선순위를 계산한 것이며 확진이 아닙니다. 카메라 현장증거와 필요 시 토양·엽 분석으로 다시 검증합니다.",
     }
 
 
