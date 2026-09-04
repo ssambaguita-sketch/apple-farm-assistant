@@ -7,8 +7,8 @@ services:
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
-      - key: APPLE_FARM_DB
-        value: /tmp/apple_farm.db
+      - key: DATABASE_URL
+        sync: false
       - key: KMA_SERVICE_KEY
         sync: false
       - key: TELEGRAM_BOT_TOKEN
