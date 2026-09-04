@@ -48,6 +48,7 @@ jobs:
           manifest_tag = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
           perms = (
               '<uses-permission android:name="android.permission.INTERNET"/>\n'
+              '    <uses-permission android:name="android.permission.CAMERA"/>\n'
               '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n'
               '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>'
           )
