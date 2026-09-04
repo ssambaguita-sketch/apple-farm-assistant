@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'main.dart' as legacy;
 import 'annual_flow_page.dart';
-import 'diagnosis_page.dart';
+import 'recommendation_diagnosis_page.dart';
 import 'services/farm_api.dart';
 
 Future<void> main() async {
@@ -34,7 +34,7 @@ class _AnnualHomeState extends State<AnnualHome> {
   final pages = const [
     legacy.DashboardPage(),
     AnnualFlowPage(),
-    DiagnosisPage(),
+    RecommendationDiagnosisPage(),
     legacy.TaskPage(),
     legacy.WeedPage(),
     legacy.CoachPage(),
@@ -50,7 +50,7 @@ class _AnnualHomeState extends State<AnnualHome> {
           destinations: const [
             NavigationDestination(icon: Icon(Icons.home_outlined), label: '홈'),
             NavigationDestination(icon: Icon(Icons.calendar_month_outlined), label: '연간'),
-            NavigationDestination(icon: Icon(Icons.camera_alt_outlined), label: '진단'),
+            NavigationDestination(icon: Icon(Icons.biotech_outlined), label: '예찰진단'),
             NavigationDestination(icon: Icon(Icons.task_alt), label: '작업'),
             NavigationDestination(icon: Icon(Icons.grass), label: '잡초'),
             NavigationDestination(icon: Icon(Icons.psychology_outlined), label: '코치'),
