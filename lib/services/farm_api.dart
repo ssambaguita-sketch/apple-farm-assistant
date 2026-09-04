@@ -29,11 +29,79 @@ class FarmApi {
     try {
       final r = await http
           .get(Uri.parse('$_baseUrl/health'))
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 20));
       return r.statusCode == 200;
     } catch (_) {
       return false;
     }
+  }
+
+  Future<Map<String, dynamic>> diagnostics(String orchard) async {
+    final result = <String, dynamic>{
+      'server': false,
+      'database': false,
+      'kma_configured': false,
+      'weather': false,
+      'weather_source': 'unknown',
+      'tasks': false,
+      'coach': false,
+      'messages': <String>[],
+    };
+
+    try {
+      final r = await http
+          .get(Uri.parse('$_baseUrl/health'))
+          .timeout(const Duration(seconds: 25));
+      if (r.statusCode == 200) {
+        final j = Map<String, dynamic>.from(jsonDecode(r.body));
+        result['server'] = j['ok'] == true;
+        result['database'] = j['database_ok'] == true;
+        result['kma_configured'] = j['kma_configured'] == true;
+        result['server_version'] = j['version'];
+        result['database_type'] = j['database'];
+      }
+    } catch (e) {
+      (result['messages'] as List<String>).add('서버 상태 확인 실패');
+    }
+
+    try {
+      final u = Uri.parse('$_baseUrl/api/weather')
+          .replace(queryParameters: {'orchard': orchard});
+      final r = await http.get(u).timeout(const Duration(seconds: 25));
+      if (r.statusCode == 200) {
+        final j = Map<String, dynamic>.from(jsonDecode(r.body));
+        result['weather'] = true;
+        result['weather_source'] = j['weather_source'] ?? 'unknown';
+        result['weather_warning'] = j['weather_warning'];
+        result['weather_grid'] = j['grid'];
+      }
+    } catch (_) {
+      (result['messages'] as List<String>).add('날씨 API 확인 실패');
+    }
+
+    try {
+      final u = Uri.parse('$_baseUrl/api/tasks')
+          .replace(queryParameters: {'orchard': orchard});
+      final r = await http.get(u).timeout(const Duration(seconds: 20));
+      if (r.statusCode == 200) {
+        result['tasks'] = true;
+        final data = jsonDecode(r.body);
+        result['task_count'] = data is List ? data.length : 0;
+      }
+    } catch (_) {
+      (result['messages'] as List<String>).add('작업 API 확인 실패');
+    }
+
+    try {
+      final r = await http
+          .get(Uri.parse('$_baseUrl/api/coach'))
+          .timeout(const Duration(seconds: 20));
+      if (r.statusCode == 200) result['coach'] = true;
+    } catch (_) {
+      (result['messages'] as List<String>).add('코치 API 확인 실패');
+    }
+
+    return result;
   }
 
   Map<String, dynamic> _demoDashboard(String orchard) => {
@@ -71,7 +139,7 @@ class FarmApi {
     try {
       final u = Uri.parse('$_baseUrl/api/dashboard')
           .replace(queryParameters: {'orchard': orchard});
-      final r = await http.get(u).timeout(const Duration(seconds: 8));
+      final r = await http.get(u).timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) {
         return Map<String, dynamic>.from(jsonDecode(r.body));
       }
@@ -83,7 +151,7 @@ class FarmApi {
     try {
       final r = await http
           .get(Uri.parse('$_baseUrl/api/orchards'))
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) return jsonDecode(r.body);
     } catch (_) {}
     return [
@@ -95,7 +163,7 @@ class FarmApi {
     try {
       final u = Uri.parse('$_baseUrl/api/tasks')
           .replace(queryParameters: {'orchard': orchard});
-      final r = await http.get(u).timeout(const Duration(seconds: 8));
+      final r = await http.get(u).timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) return jsonDecode(r.body);
     } catch (_) {}
     return [];
@@ -121,7 +189,7 @@ class FarmApi {
               'scheduled_at': scheduledAt,
             }),
           )
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 20));
       return r.statusCode >= 200 && r.statusCode < 300;
     } catch (_) {
       return false;
@@ -132,7 +200,7 @@ class FarmApi {
     try {
       final r = await http
           .post(Uri.parse('$_baseUrl/api/tasks/$taskId/complete'))
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 20));
       return r.statusCode >= 200 && r.statusCode < 300;
     } catch (_) {
       return false;
@@ -143,7 +211,7 @@ class FarmApi {
     try {
       final r = await http
           .get(Uri.parse('$_baseUrl/api/coach'))
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) {
         return Map<String, dynamic>.from(jsonDecode(r.body));
       }
@@ -168,7 +236,7 @@ class FarmApi {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(data),
           )
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) {
         return Map<String, dynamic>.from(jsonDecode(r.body));
       }
