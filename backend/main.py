@@ -91,7 +91,7 @@ work_events = Table(
     Column("created_at", String(40), nullable=False),
 )
 
-app = FastAPI(title="Apple Farm Assistant API", version="4.1.0")
+app = FastAPI(title="Apple Farm Assistant API", version="4.2.0")
 
 
 def now_iso() -> str:
@@ -113,6 +113,12 @@ class OrchardIn(BaseModel):
     lon: Optional[float] = None
     nx: Optional[int] = None
     ny: Optional[int] = None
+
+
+class OrchardLocationIn(BaseModel):
+    orchard: str = "A과수원"
+    lat: float
+    lon: float
 
 
 class TaskIn(BaseModel):
@@ -342,7 +348,7 @@ def health():
         db_ok = False
     return {
         "ok": True,
-        "version": "4.1.0",
+        "version": "4.2.0",
         "time": now_iso(),
         "database": db_kind,
         "database_ok": db_ok,
@@ -369,6 +375,27 @@ def add_orchard(x: OrchardIn):
     except IntegrityError:
         raise HTTPException(409, "이미 존재하는 과수원 이름입니다")
     return {"ok": True}
+
+
+@app.post("/api/orchards/location")
+def save_orchard_location(x: OrchardLocationIn):
+    name = x.orchard.strip() or "A과수원"
+    if not (-90 <= x.lat <= 90 and -180 <= x.lon <= 180):
+        raise HTTPException(400, "유효하지 않은 위도/경도입니다")
+    nx, ny = latlon_to_grid(x.lat, x.lon)
+    with engine.begin() as c:
+        row = c.execute(select(orchards.c.id).where(orchards.c.name == name)).first()
+        if row:
+            c.execute(update(orchards).where(orchards.c.name == name).values(
+                lat=x.lat, lon=x.lon, nx=nx, ny=ny
+            ))
+        else:
+            c.execute(insert(orchards).values(
+                name=name, variety="후지", area_m2=0, tree_count=0,
+                growth_stage="", lat=x.lat, lon=x.lon, nx=nx, ny=ny,
+                created_at=now_iso()
+            ))
+    return {"ok": True, "orchard": name, "grid": {"nx": nx, "ny": ny}}
 
 
 @app.post("/api/tasks")
