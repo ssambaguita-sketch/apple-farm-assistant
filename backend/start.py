@@ -5,6 +5,7 @@ import threat_titles  # makes broad threat types explicit in recommendation titl
 import specific_threats  # refines broad threats into concrete seasonal scouting candidates
 import recommendation_diagnosis  # runs diagnosis pre-checks for recommendation candidates
 import behavior_coach  # non-diagnostic behavioral screening and coaching
+import orchard_management  # multi-orchard and multi-variety management
 
 app = base_app.app
-app.version = "5.1.0"
+app.version = "5.2.0"
