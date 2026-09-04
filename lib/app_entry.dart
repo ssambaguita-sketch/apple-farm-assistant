@@ -4,6 +4,7 @@ import 'variety_annual_flow_page.dart';
 import 'recommendation_diagnosis_page.dart';
 import 'behavior_coach_page.dart';
 import 'orchard_manager_page.dart';
+import 'weed_intelligence_page.dart';
 import 'services/farm_api.dart';
 import 'services/orchard_api.dart';
 import 'services/orchard_selection.dart';
@@ -43,7 +44,7 @@ class _AnnualHomeState extends State<AnnualHome> {
         VarietyAnnualFlowPage(),
         RecommendationDiagnosisPage(),
         legacy.TaskPage(),
-        legacy.WeedPage(),
+        WeedIntelligencePage(),
         BehaviorCoachPage(),
         legacy.MorePage(),
       ];
