@@ -65,7 +65,8 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> load() async {
     setState(() => loading = true);
-    d = await api.dashboard(orchard.text.trim().isEmpty ? 'A과수원' : orchard.text.trim());
+    d = await api.dashboard(
+        orchard.text.trim().isEmpty ? 'A과수원' : orchard.text.trim());
     if (mounted) setState(() => loading = false);
   }
 
@@ -97,9 +98,15 @@ class _DashboardPageState extends State<DashboardPage> {
                 subtitle: Text('서버 연결 실패로 기본값을 표시합니다.'))),
       Card(
         child: ListTile(
-          leading: Icon(weatherSource == 'kma' ? Icons.cloud_done : Icons.warning_amber),
-          title: Text(weatherSource == 'kma' ? '기상청 실시간 예보 사용 중' : '데모 날씨 사용 중'),
-          subtitle: Text(warning == null ? '추천 작업시간은 현재 예보를 기반으로 계산합니다.' : '$warning'),
+          leading: Icon(weatherSource == 'kma'
+              ? Icons.cloud_done
+              : Icons.warning_amber),
+          title: Text(weatherSource == 'kma'
+              ? '기상청 실시간 예보 사용 중'
+              : '데모 날씨 사용 중'),
+          subtitle: Text(warning == null
+              ? '추천 작업시간은 현재 예보를 기반으로 계산합니다.'
+              : '$warning'),
         ),
       ),
       TextField(
@@ -160,7 +167,8 @@ class _TaskPageState extends State<TaskPage> {
       loading = true;
       message = '';
     });
-    items = await api.tasks(orchard.text.trim().isEmpty ? 'A과수원' : orchard.text.trim());
+    items = await api.tasks(
+        orchard.text.trim().isEmpty ? 'A과수원' : orchard.text.trim());
     if (mounted) setState(() => loading = false);
   }
 
@@ -176,15 +184,20 @@ class _TaskPageState extends State<TaskPage> {
           title: const Text('작업 추가'),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextField(controller: title, decoration: const InputDecoration(labelText: '작업명')),
-              TextField(controller: scheduled, decoration: const InputDecoration(labelText: '예정시간/날짜')),
+              TextField(
+                  controller: title,
+                  decoration: const InputDecoration(labelText: '작업명')),
+              TextField(
+                  controller: scheduled,
+                  decoration: const InputDecoration(labelText: '예정시간/날짜')),
               DropdownButtonFormField<String>(
                 value: category,
                 decoration: const InputDecoration(labelText: '분류'),
                 items: const ['일반', '전정', '적과', '관수', '방제', '예찰', '수확']
                     .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                     .toList(),
-                onChanged: (v) => setDialogState(() => category = v ?? '일반'),
+                onChanged: (v) =>
+                    setDialogState(() => category = v ?? '일반'),
               ),
               DropdownButtonFormField<int>(
                 value: priority,
@@ -197,12 +210,16 @@ class _TaskPageState extends State<TaskPage> {
             ]),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('취소')),
             FilledButton(
               onPressed: () async {
                 if (title.text.trim().isEmpty) return;
                 final success = await api.addTask(
-                  orchard: orchard.text.trim().isEmpty ? 'A과수원' : orchard.text.trim(),
+                  orchard: orchard.text.trim().isEmpty
+                      ? 'A과수원'
+                      : orchard.text.trim(),
                   title: title.text.trim(),
                   category: category,
                   priority: priority,
@@ -227,7 +244,9 @@ class _TaskPageState extends State<TaskPage> {
   Future<void> complete(int id) async {
     final ok = await api.completeTask(id);
     if (!mounted) return;
-    setState(() => message = ok ? '✅ 작업 완료 처리되었습니다.' : '⚠️ 완료 처리에 실패했습니다.');
+    setState(() => message = ok
+        ? '✅ 작업 완료 처리되었습니다.'
+        : '⚠️ 완료 처리에 실패했습니다.');
     if (ok) await load();
   }
 
@@ -238,12 +257,15 @@ class _TaskPageState extends State<TaskPage> {
   }
 
   @override
-  Widget build(BuildContext c) => ListView(padding: const EdgeInsets.all(16), children: [
+  Widget build(BuildContext c) =>
+      ListView(padding: const EdgeInsets.all(16), children: [
         Row(children: [
           const Expanded(
               child: Text('작업관리',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
-          IconButton(onPressed: loading ? null : load, icon: const Icon(Icons.refresh)),
+          IconButton(
+              onPressed: loading ? null : load,
+              icon: const Icon(Icons.refresh)),
         ]),
         TextField(
           controller: orchard,
@@ -251,18 +273,34 @@ class _TaskPageState extends State<TaskPage> {
           onSubmitted: (_) => load(),
         ),
         const SizedBox(height: 8),
-        FilledButton.icon(onPressed: add, icon: const Icon(Icons.add), label: const Text('작업 추가')),
-        if (message.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(message)),
-        if (loading) const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator())),
+        FilledButton.icon(
+            onPressed: add,
+            icon: const Icon(Icons.add),
+            label: const Text('작업 추가')),
+        if (message.isNotEmpty)
+          Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(message)),
+        if (loading)
+          const Center(
+              child: Padding(
+                  padding: EdgeInsets.all(20),
+                  child: CircularProgressIndicator())),
         if (!loading && items.isEmpty)
-          const Card(child: ListTile(title: Text('등록된 작업이 없습니다.'), subtitle: Text('위의 작업 추가 버튼으로 첫 작업을 등록하세요.'))),
+          const Card(
+              child: ListTile(
+                  title: Text('등록된 작업이 없습니다.'),
+                  subtitle: Text('위의 작업 추가 버튼으로 첫 작업을 등록하세요.'))),
         ...items.map((x) {
           final status = '${x['status'] ?? '예정'}';
           return Card(
             child: ListTile(
-              leading: Icon(status == '완료' ? Icons.check_circle : Icons.pending_actions),
+              leading: Icon(status == '완료'
+                  ? Icons.check_circle
+                  : Icons.pending_actions),
               title: Text('${x['title']}'),
-              subtitle: Text('${x['category'] ?? '일반'} · ${x['scheduled_at'] ?? ''} · P${x['priority'] ?? 2}'),
+              subtitle: Text(
+                  '${x['category'] ?? '일반'} · ${x['scheduled_at'] ?? ''} · P${x['priority'] ?? 2}'),
               trailing: status == '완료'
                   ? const Text('완료')
                   : IconButton(
@@ -304,13 +342,20 @@ class _WeedPageState extends State<WeedPage> {
     final causes = (d['possible_causes'] as List?) ?? [];
     final actions = (d['actions'] as List?) ?? [];
     return ListView(padding: const EdgeInsets.all(16), children: [
-      const Text('🌱 잡초·제초 관리', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-      const Card(child: ListTile(title: Text('잡초 예찰'), subtitle: Text('유형·생육단계·밀도·구역 기록'))),
-      FilledButton(onPressed: run, child: const Text('제초 후 안 죽는 잡초 원인분석')),
+      const Text('🌱 잡초·제초 관리',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+      const Card(
+          child: ListTile(
+              title: Text('잡초 예찰'),
+              subtitle: Text('유형·생육단계·밀도·구역 기록'))),
+      FilledButton(
+          onPressed: run,
+          child: const Text('제초 후 안 죽는 잡초 원인분석')),
       ...causes.map((x) => Text('• 원인: $x')),
       ...actions.map((x) => Text('• 조언: $x')),
       const SizedBox(height: 8),
-      const Text('제품·농도는 자동 처방하지 않습니다. PSIS 등록사항과 제품 라벨을 확인하세요.', style: TextStyle(color: Colors.redAccent)),
+      const Text('제품·농도는 자동 처방하지 않습니다. PSIS 등록사항과 제품 라벨을 확인하세요.',
+          style: TextStyle(color: Colors.redAccent)),
     ]);
   }
 }
@@ -339,9 +384,14 @@ class _CoachPageState extends State<CoachPage> {
   Widget build(BuildContext c) {
     final b = (d['best_hours'] as List?) ?? [];
     return ListView(padding: const EdgeInsets.all(16), children: [
-      const Text('작업효율 AI 코치', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+      const Text('작업효율 AI 코치',
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
       const Text('작업완료·시간대·체감난이도만 사용하며 생체정보를 추론하지 않습니다.'),
-      ...b.map((x) => Card(child: ListTile(title: Text('${x['hour']}시'), subtitle: Text('${x['samples']}건 학습'), trailing: Text('${x['score']}점')))),
+      ...b.map((x) => Card(
+          child: ListTile(
+              title: Text('${x['hour']}시'),
+              subtitle: Text('${x['samples']}건 학습'),
+              trailing: Text('${x['score']}점')))),
     ]);
   }
 }
@@ -354,8 +404,11 @@ class MorePage extends StatefulWidget {
 
 class _MorePageState extends State<MorePage> {
   late final TextEditingController server;
+  final orchard = TextEditingController(text: 'A과수원');
   String status = FarmApi.isOfflineOnly ? '오프라인 모드' : '서버 주소 저장됨';
   bool checking = false;
+  bool diagnosing = false;
+  Map<String, dynamic> diag = {};
 
   @override
   void initState() {
@@ -377,9 +430,33 @@ class _MorePageState extends State<MorePage> {
     });
   }
 
+  Future<void> runDiagnostics() async {
+    setState(() {
+      diagnosing = true;
+      diag = {};
+    });
+    final result = await FarmApi().diagnostics(
+        orchard.text.trim().isEmpty ? 'A과수원' : orchard.text.trim());
+    if (!mounted) return;
+    setState(() {
+      diagnosing = false;
+      diag = result;
+    });
+  }
+
+  Widget diagTile(String label, dynamic ok, {String? detail}) => Card(
+        child: ListTile(
+          leading: Icon(ok == true ? Icons.check_circle : Icons.error_outline),
+          title: Text('${ok == true ? '✅' : '⚠️'} $label'),
+          subtitle: detail == null ? null : Text(detail),
+        ),
+      );
+
   @override
-  Widget build(BuildContext c) => ListView(padding: const EdgeInsets.all(16), children: [
-        const Text('설정 · 서버 연결', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+  Widget build(BuildContext c) =>
+      ListView(padding: const EdgeInsets.all(16), children: [
+        const Text('설정 · 서버 연결',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         TextField(
           controller: server,
@@ -401,9 +478,53 @@ class _MorePageState extends State<MorePage> {
                 title: Text(status),
                 subtitle: Text(FarmApi.baseUrl))),
         const Divider(),
-        const Card(child: ListTile(title: Text('과수원 관리'), subtitle: Text('품종·면적·나무수·GPS·생육단계'))),
-        const Card(child: ListTile(title: Text('경영 관리'), subtitle: Text('비용·매출·수확량·순이익'))),
-        const Card(child: ListTile(title: Text('외부 연동'), subtitle: Text('기상청 API · Telegram은 서버 환경변수로 설정'))),
-        const Card(child: ListTile(title: Text('농약 안전'), subtitle: Text('등록작물·적용대상·사용시기·횟수·작용기작은 공식 PSIS와 제품 라벨 확인'))),
+        const Text('전체 기능 진단',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const Text('데이터를 쓰지 않고 서버·DB·날씨·작업·코치 API를 읽기 전용으로 검사합니다.'),
+        TextField(
+            controller: orchard,
+            decoration: const InputDecoration(labelText: '진단할 과수원')),
+        const SizedBox(height: 8),
+        FilledButton.icon(
+          onPressed: diagnosing ? null : runDiagnostics,
+          icon: const Icon(Icons.health_and_safety_outlined),
+          label: Text(diagnosing ? '진단 중...' : '전체 기능 진단 실행'),
+        ),
+        if (diagnosing)
+          const Center(
+              child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator())),
+        if (diag.isNotEmpty) ...[
+          diagTile('서버', diag['server'],
+              detail: '버전 ${diag['server_version'] ?? '-'}'),
+          diagTile('데이터베이스', diag['database'],
+              detail: '${diag['database_type'] ?? '-'}'),
+          diagTile('KMA 키 설정', diag['kma_configured']),
+          diagTile('날씨 API', diag['weather'],
+              detail:
+                  '소스: ${diag['weather_source'] ?? 'unknown'}${diag['weather_warning'] == null ? '' : '\n${diag['weather_warning']}'}'),
+          diagTile('작업 API', diag['tasks'],
+              detail: '등록 작업 ${diag['task_count'] ?? 0}건'),
+          diagTile('코치 API', diag['coach']),
+        ],
+        const Divider(),
+        const Card(
+            child: ListTile(
+                title: Text('과수원 관리'),
+                subtitle: Text('품종·면적·나무수·GPS·생육단계'))),
+        const Card(
+            child: ListTile(
+                title: Text('경영 관리'),
+                subtitle: Text('비용·매출·수확량·순이익'))),
+        const Card(
+            child: ListTile(
+                title: Text('외부 연동'),
+                subtitle: Text('기상청 API · Telegram은 서버 환경변수로 설정'))),
+        const Card(
+            child: ListTile(
+                title: Text('농약 안전'),
+                subtitle: Text(
+                    '등록작물·적용대상·사용시기·횟수·작용기작은 공식 PSIS와 제품 라벨 확인'))),
       ]);
 }
