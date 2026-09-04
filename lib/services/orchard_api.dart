@@ -43,9 +43,11 @@ class OrchardApi {
       if (r.statusCode >= 200 && r.statusCode < 300) {
         return Map<String, dynamic>.from(jsonDecode(r.body));
       }
-      return {'error': _message(r.body, '과수원 등록 실패')};
-    } catch (_) {
-      return {'error': '서버 연결 실패'};
+      return {'error': _message(r, '과수원 등록 실패')};
+    } on TimeoutException {
+      return {'error': '서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도하세요.'};
+    } catch (e) {
+      return {'error': '서버 연결 실패 (${e.runtimeType})'};
     }
   }
 
@@ -74,17 +76,21 @@ class OrchardApi {
       if (r.statusCode >= 200 && r.statusCode < 300) {
         return Map<String, dynamic>.from(jsonDecode(r.body));
       }
-      return {'error': _message(r.body, '과수원 수정 실패')};
-    } catch (_) {
-      return {'error': '서버 연결 실패'};
+      return {'error': _message(r, '과수원 수정 실패')};
+    } on TimeoutException {
+      return {'error': '과수원 수정 요청 시간이 초과되었습니다. 서버가 깨어난 뒤 다시 시도하세요.'};
+    } catch (e) {
+      return {'error': '과수원 수정 서버 연결 실패 (${e.runtimeType})'};
     }
   }
 
-  String _message(String body, String fallback) {
+  String _message(http.Response response, String fallback) {
     try {
-      final j = jsonDecode(body);
-      if (j is Map && j['detail'] != null) return '${j['detail']}';
+      final j = jsonDecode(response.body);
+      if (j is Map && j['detail'] != null) {
+        return '${j['detail']} (HTTP ${response.statusCode})';
+      }
     } catch (_) {}
-    return fallback;
+    return '$fallback (HTTP ${response.statusCode})';
   }
 }
