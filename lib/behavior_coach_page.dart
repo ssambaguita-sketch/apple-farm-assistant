@@ -10,40 +10,67 @@ class BehaviorCoachPage extends StatefulWidget {
 
 class _BehaviorCoachPageState extends State<BehaviorCoachPage> {
   final api = BehaviorCoachApi();
-  final planned = TextEditingController(text: '3');
-  final completed = TextEditingController(text: '2');
-  final delay = TextEditingController(text: '0');
-  final switches = TextEditingController(text: '0');
-  final estimated = TextEditingController(text: '60');
-  final actual = TextEditingController(text: '60');
 
-  int attention = 0;
-  int lowMood = 0;
-  int lowInterest = 0;
-  int functionDifficulty = 0;
+  int? plannedChoice;
+  int? completedChoice;
+  int? delayChoice;
+  int? switchesChoice;
+  int? estimatedChoice;
+  int? actualChoice;
+  int? attention;
+  int? lowMood;
+  int? lowInterest;
+  int? functionDifficulty;
+
   bool saving = false;
   bool loading = false;
   Map<String, dynamic> result = {};
   String message = '';
 
-  int _int(TextEditingController c) => int.tryParse(c.text.trim()) ?? 0;
+  bool get allAnswered =>
+      plannedChoice != null &&
+      completedChoice != null &&
+      delayChoice != null &&
+      switchesChoice != null &&
+      estimatedChoice != null &&
+      actualChoice != null &&
+      attention != null &&
+      lowMood != null &&
+      lowInterest != null &&
+      functionDifficulty != null;
+
+  int get plannedTasks => const [1, 2, 3, 5][plannedChoice ?? 0];
+
+  int get completedTasks {
+    final ratio = const [0.0, 0.5, 0.8, 1.0][completedChoice ?? 0];
+    return (plannedTasks * ratio).round();
+  }
+
+  int get startDelayMin => const [0, 10, 30, 60][delayChoice ?? 0];
+  int get taskSwitches => const [0, 1, 3, 5][switchesChoice ?? 0];
+  int get estimatedMinutes => const [30, 60, 120, 240][estimatedChoice ?? 0];
+  int get actualMinutes => const [30, 60, 120, 240][actualChoice ?? 0];
 
   Future<void> save() async {
+    if (!allAnswered) {
+      setState(() => message = '모든 문항에서 하나씩 선택해야 저장할 수 있습니다.');
+      return;
+    }
     setState(() {
       saving = true;
       message = '';
     });
     final ok = await api.saveCheckin({
-      'planned_tasks': _int(planned),
-      'completed_tasks': _int(completed),
-      'start_delay_min': _int(delay),
-      'task_switches': _int(switches),
-      'estimated_duration_min': _int(estimated),
-      'actual_duration_min': _int(actual),
-      'attention_difficulty': attention,
-      'low_mood': lowMood,
-      'low_interest': lowInterest,
-      'function_difficulty': functionDifficulty,
+      'planned_tasks': plannedTasks,
+      'completed_tasks': completedTasks,
+      'start_delay_min': startDelayMin,
+      'task_switches': taskSwitches,
+      'estimated_duration_min': estimatedMinutes,
+      'actual_duration_min': actualMinutes,
+      'attention_difficulty': attention!,
+      'low_mood': lowMood!,
+      'low_interest': lowInterest!,
+      'function_difficulty': functionDifficulty!,
     });
     if (!mounted) return;
     setState(() {
@@ -69,31 +96,41 @@ class _BehaviorCoachPageState extends State<BehaviorCoachPage> {
     load();
   }
 
-  Widget numberField(String label, TextEditingController c) => TextField(
-        controller: c,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-      );
-
-  Widget scale(String label, int value, ValueChanged<int> onChanged) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 0, label: Text('없음')),
-                ButtonSegment(value: 1, label: Text('가끔')),
-                ButtonSegment(value: 2, label: Text('자주')),
-                ButtonSegment(value: 3, label: Text('매우 자주')),
-              ],
-              selected: {value},
-              onSelectionChanged: (x) => onChanged(x.first),
-            ),
-          ]),
-        ),
-      );
+  Widget choiceQuestion({
+    required String question,
+    required List<String> choices,
+    required int? value,
+    required ValueChanged<int> onChanged,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(question, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          ...List.generate(4, (i) {
+            final selected = value == i;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: SizedBox(
+                width: double.infinity,
+                child: selected
+                    ? FilledButton.icon(
+                        onPressed: () => onChanged(i),
+                        icon: const Icon(Icons.check_circle_outline),
+                        label: Align(alignment: Alignment.centerLeft, child: Text(choices[i])),
+                      )
+                    : OutlinedButton(
+                        onPressed: () => onChanged(i),
+                        child: Align(alignment: Alignment.centerLeft, child: Text(choices[i])),
+                      ),
+              ),
+            );
+          }),
+        ]),
+      ),
+    );
+  }
 
   Widget signalCard(String title, dynamic raw) {
     final m = raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
@@ -134,37 +171,87 @@ class _BehaviorCoachPageState extends State<BehaviorCoachPage> {
       children: [
         const Text('🧠 행동 기반 작업효율 코치', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        const Text('작업행동과 사용자의 직접 자기보고를 분석해 행동 패턴과 교정 실험을 제안합니다. 정신질환을 진단하지 않습니다.'),
+        const Text('오늘 상태를 4지선다로 빠르게 기록합니다. 모든 문항을 선택해야 저장됩니다. 정신질환을 진단하지 않습니다.'),
         const SizedBox(height: 12),
-        const Text('오늘 작업행동 기록', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
         Row(children: [
-          Expanded(child: numberField('계획 작업 수', planned)),
-          const SizedBox(width: 8),
-          Expanded(child: numberField('완료 작업 수', completed)),
+          const Expanded(child: Text('오늘 체크인', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+          Chip(label: Text('${[
+            plannedChoice, completedChoice, delayChoice, switchesChoice, estimatedChoice,
+            actualChoice, attention, lowMood, lowInterest, functionDifficulty
+          ].where((x) => x != null).length}/10')),
         ]),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: numberField('시작 지연(분)', delay)),
-          const SizedBox(width: 8),
-          Expanded(child: numberField('작업 전환 횟수', switches)),
-        ]),
-        const SizedBox(height: 8),
-        Row(children: [
-          Expanded(child: numberField('예상시간(분)', estimated)),
-          const SizedBox(width: 8),
-          Expanded(child: numberField('실제시간(분)', actual)),
-        ]),
-        const SizedBox(height: 8),
-        scale('주의를 유지하거나 한 작업을 끝까지 이어가기 어려웠나요?', attention, (v) => setState(() => attention = v)),
-        scale('기분이 가라앉거나 의욕이 떨어졌다고 느꼈나요?', lowMood, (v) => setState(() => lowMood = v)),
-        scale('평소 하던 일에 흥미나 즐거움이 줄었다고 느꼈나요?', lowInterest, (v) => setState(() => lowInterest = v)),
-        scale('이런 상태가 일상 작업 수행을 어렵게 했나요?', functionDifficulty, (v) => setState(() => functionDifficulty = v)),
-        FilledButton.icon(
-          onPressed: saving ? null : save,
-          icon: const Icon(Icons.save_outlined),
-          label: Text(saving ? '저장 중...' : '오늘 행동기록 저장'),
+        const SizedBox(height: 6),
+        choiceQuestion(
+          question: '1. 오늘 계획한 작업은 몇 개인가요?',
+          choices: const ['1개', '2개', '3개', '4개 이상'],
+          value: plannedChoice,
+          onChanged: (v) => setState(() => plannedChoice = v),
         ),
+        choiceQuestion(
+          question: '2. 계획한 작업을 어느 정도 완료했나요?',
+          choices: const ['거의 못함', '절반 정도', '대부분 완료', '모두 완료'],
+          value: completedChoice,
+          onChanged: (v) => setState(() => completedChoice = v),
+        ),
+        choiceQuestion(
+          question: '3. 첫 작업을 시작하기까지 얼마나 미뤘나요?',
+          choices: const ['바로 시작', '10분 안팎', '30분 안팎', '1시간 이상'],
+          value: delayChoice,
+          onChanged: (v) => setState(() => delayChoice = v),
+        ),
+        choiceQuestion(
+          question: '4. 작업 도중 다른 일로 몇 번 정도 바뀌었나요?',
+          choices: const ['거의 없음', '1회 정도', '2~3회', '4회 이상'],
+          value: switchesChoice,
+          onChanged: (v) => setState(() => switchesChoice = v),
+        ),
+        choiceQuestion(
+          question: '5. 시작 전 예상한 전체 작업시간은?',
+          choices: const ['30분 이하', '약 1시간', '약 2시간', '3시간 이상'],
+          value: estimatedChoice,
+          onChanged: (v) => setState(() => estimatedChoice = v),
+        ),
+        choiceQuestion(
+          question: '6. 실제로 걸린 전체 작업시간은?',
+          choices: const ['30분 이하', '약 1시간', '약 2시간', '3시간 이상'],
+          value: actualChoice,
+          onChanged: (v) => setState(() => actualChoice = v),
+        ),
+        choiceQuestion(
+          question: '7. 오늘 한 작업에 주의를 계속 유지하기 어려웠나요?',
+          choices: const ['전혀 아님', '조금', '자주', '매우 자주'],
+          value: attention,
+          onChanged: (v) => setState(() => attention = v),
+        ),
+        choiceQuestion(
+          question: '8. 오늘 기분이 가라앉거나 의욕이 떨어졌나요?',
+          choices: const ['전혀 아님', '조금', '자주', '매우 자주'],
+          value: lowMood,
+          onChanged: (v) => setState(() => lowMood = v),
+        ),
+        choiceQuestion(
+          question: '9. 평소 하던 일의 흥미나 즐거움이 줄었나요?',
+          choices: const ['전혀 아님', '조금', '자주', '매우 자주'],
+          value: lowInterest,
+          onChanged: (v) => setState(() => lowInterest = v),
+        ),
+        choiceQuestion(
+          question: '10. 이런 상태 때문에 오늘 일상 작업이 어려웠나요?',
+          choices: const ['전혀 아님', '조금', '많이', '매우 많이'],
+          value: functionDifficulty,
+          onChanged: (v) => setState(() => functionDifficulty = v),
+        ),
+        const SizedBox(height: 8),
+        FilledButton.icon(
+          onPressed: (!allAnswered || saving) ? null : save,
+          icon: const Icon(Icons.save_outlined),
+          label: Text(saving ? '저장 중...' : allAnswered ? '10문항 저장하고 분석' : '모든 문항을 선택하세요'),
+        ),
+        if (!allAnswered)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text('미응답 문항이 있으면 저장할 수 없습니다.', style: TextStyle(fontSize: 12)),
+          ),
         if (message.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(message)),
         const Divider(height: 28),
         Row(children: [
