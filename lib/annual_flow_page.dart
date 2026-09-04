@@ -114,6 +114,36 @@ class AnnualFlowPage extends StatelessWidget {
     },
   ];
 
+  static const _micronutrients = <int, List<String>>{
+    1: ['미량원소 직접 투입보다 전년도 엽분석·토양검정 결과 확인', 'B·Zn·Fe·Mn 결핍 이력 구역 표시'],
+    2: ['B·Zn 결핍 이력 확인', '고pH 토양은 Fe·Mn 흡수장해 가능성 점검'],
+    3: ['B·Zn 상태 점검 — 꽃눈·발아 균일성과 과거 결핍기록 기준', 'Fe·Mn은 토양 pH와 새잎 황화 이력 있을 때 우선 확인'],
+    4: ['B(붕소) — 개화·착과 관련 결핍 징후 있을 때 검토', 'Zn(아연) — 왜소엽·짧은 마디 등 결핍 이력 있을 때 확인', 'Fe·Mn — 새잎 잎맥 사이 황화가 보일 때 확인'],
+    5: ['B·Zn — 신초·착과 이상이 지속될 때 재확인', 'Fe·Mn — 새잎 황화가 지속될 때 pH·뿌리환경과 함께 점검'],
+    6: ['Fe·Mn — 새잎 황화 지속 시 확인', 'B·Zn은 무조건 추가하지 말고 증상·분석결과가 있을 때만 검토'],
+    7: ['미량원소보다 Mg·K·Ca 상태 확인 비중 증가', 'Fe·Mn 결핍은 고pH·과습 등 흡수장해와 구분'],
+    8: ['미량원소 추가 살포보다 엽분석·증상 확인 우선', '수확 전 불필요한 B·Zn·Fe·Mn 추가 투입 지양'],
+    9: ['수확기에는 결핍 증상 기록 중심', 'B·Zn·Fe·Mn 보정은 분석자료를 모아 다음 시기 계획에 반영'],
+    10: ['수확 중 결핍 의심 나무·구역 표시', '미량원소 보정은 수확 후 토양·엽 분석과 함께 계획'],
+    11: ['B·Zn·Fe·Mn 결핍 이력과 분석결과 정리', '다음 해 필요 원소를 과원 구역별로 선정'],
+    12: ['다음 해 미량원소 계획 수립', '분석결과 없는 예방적 과다 투입은 피함'],
+  };
+
+  static const _fertilizerReview = <int, List<String>>{
+    1: ['기비 계획 수립 — N·P·K는 토양검정과 목표 수량 기준으로 결정', '유기물·토양개량 필요 여부를 배수·토양구조와 함께 검토'],
+    2: ['기비 시용 여부·시기는 지역 토양과 동결 상태를 고려해 결정', '석회·고토 등 토양개량재는 pH·Mg 분석값 확인 후 검토'],
+    3: ['발아 전 N·P·K 부족 여부 확인', '질소는 수세가 강한 나무에 일률적으로 추가하지 않음'],
+    4: ['개화기 과도한 질소 추비는 피하고 수세·엽색을 먼저 확인', 'Ca·Mg 부족 이력은 이후 과실비대기 관리계획에 반영'],
+    5: ['착과량이 많고 수세가 약할 때만 추비 필요성 검토', 'N·K 균형을 보되 과도한 질소는 웃자람 위험과 함께 판단'],
+    6: ['과실비대기 K(칼륨) 수요와 Mg(마그네슘) 길항관계 함께 점검', 'Ca(칼슘)는 과실 품질 관리 관점에서 토양·엽 상태와 함께 검토'],
+    7: ['K·Mg·Ca 균형 점검 — 한 성분 과다 투입으로 다른 성분 흡수 저해가 없는지 확인', '고온·가뭄 시 비료보다 관수·뿌리환경 정상화가 우선'],
+    8: ['착색기 추가 질소는 신중히 판단', 'K·Mg·Ca는 엽분석·과실 상태를 근거로 부족할 때만 보정 검토'],
+    9: ['수확 직전 불필요한 추비를 피하고 품질·수세 기록 중심', '수확 후 보정이 필요한 구역을 표시'],
+    10: ['수확 중 수세·수량·과실품질을 기록해 다음 비료계획의 근거로 사용', '즉시 추비보다 수확 후 분석계획 수립 우선'],
+    11: ['수확 후 토양검정 결과에 따라 기비·유기물·토양개량 계획 수립', 'N·P·K·Ca·Mg 부족/과다를 구역별로 정리'],
+    12: ['연간 시비량·수량·수세를 함께 결산', '다음 해 기비·추비 계획을 토양검정·엽분석 기반으로 확정'],
+  };
+
   String _season(int month) {
     if (month <= 3) return '① 겨울 준비·전정';
     if (month <= 5) return '② 개화·착과';
@@ -127,9 +157,18 @@ class AnnualFlowPage extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Row(children: [Icon(icon, size: 18), const SizedBox(width: 6), Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)))]),
+            child: Row(children: [
+              Icon(icon, size: 18),
+              const SizedBox(width: 6),
+              Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold))),
+            ]),
           ),
-          ...items.map((x) => ListTile(dense: true, visualDensity: VisualDensity.compact, leading: const Icon(Icons.arrow_right), title: Text(x))),
+          ...items.map((x) => ListTile(
+                dense: true,
+                visualDensity: VisualDensity.compact,
+                leading: const Icon(Icons.arrow_right),
+                title: Text(x),
+              )),
         ],
       );
 
@@ -137,7 +176,7 @@ class AnnualFlowPage extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(Icons.crisis_alert_outlined, size: 19),
+            const Icon(Icons.crisis_alert_outlined, size: 19),
             const SizedBox(width: 6),
             Text(current ? '이번 달 예측 위협 후보' : '시기별 예측 위협 후보', style: const TextStyle(fontWeight: FontWeight.bold)),
           ]),
@@ -149,6 +188,18 @@ class AnnualFlowPage extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text('시기 기반 예찰 후보이며 확진이 아닙니다. 현재 기상·관찰기록과 카메라 현장진단으로 우선순위를 다시 판정합니다.', style: TextStyle(fontSize: 12)),
+        ]),
+      );
+
+  Widget _nutrientPlan(int month, {bool current = false}) => Padding(
+        padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _section(Icons.science_outlined, current ? '이번 달 필요 미량원소 검토' : '시기별 미량원소 검토', _micronutrients[month] ?? const []),
+          _section(Icons.grass_outlined, current ? '이번 달 추가 비료 검토' : '시기별 추가 비료 검토', _fertilizerReview[month] ?? const []),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 2, 16, 6),
+            child: Text('※ “필요”는 고정 살포 의미가 아닙니다. 토양검정·엽분석·수세·착과량·결핍 증상을 확인한 뒤 실제 투입 여부와 양을 결정합니다.', style: TextStyle(fontSize: 12)),
+          ),
         ]),
       );
 
@@ -164,17 +215,21 @@ class AnnualFlowPage extends StatelessWidget {
       children: [
         Text('📅 연간 농작업', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        const Text('농작업·예찰 시기와 함께 그 시기에 우선 확인할 구체 위협 후보를 봅니다.'),
+        const Text('농작업·예찰·예측위협과 함께 시기별 미량원소·추가 비료 검토 항목을 봅니다.'),
         const SizedBox(height: 12),
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${now.year}년 농사 진행도', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10), LinearProgressIndicator(value: yearProgress), const SizedBox(height: 8),
+          const SizedBox(height: 10),
+          LinearProgressIndicator(value: yearProgress),
+          const SizedBox(height: 8),
           Text('${(yearProgress * 100).round()}% · 현재 ${_season(currentMonth)}'),
           Text('현재 단계: ${current['stage']}'),
           Text('이번 달 핵심목표: ${current['goal']}', style: const TextStyle(fontWeight: FontWeight.bold)),
         ]))),
         const SizedBox(height: 6),
         Card(child: _predictedThreats(current['predicted'] as List<String>, current: true)),
+        const SizedBox(height: 6),
+        Card(child: _nutrientPlan(currentMonth, current: true)),
         const SizedBox(height: 6),
         const Text('이번 달 예찰 포인트', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         Card(child: Column(children: [
@@ -196,6 +251,7 @@ class AnnualFlowPage extends StatelessWidget {
             subtitle: Text('${item['goal']}${isCurrent ? ' · 현재' : isPast ? ' · 지난 단계' : ''}'),
             children: [
               _predictedThreats(item['predicted'] as List<String>, current: isCurrent),
+              _nutrientPlan(month, current: isCurrent),
               _section(Icons.agriculture_outlined, '핵심 농작업', item['tasks'] as List<String>),
               _section(Icons.science_outlined, '영양결핍 예찰', item['nutrition'] as List<String>),
               _section(Icons.bug_report_outlined, '해충 위협 예찰', item['pest'] as List<String>),
@@ -207,8 +263,8 @@ class AnnualFlowPage extends StatelessWidget {
         const SizedBox(height: 8),
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
-          title: Text('예측 위협은 진단 대상 후보입니다'),
-          subtitle: Text('월별 후보는 기본 발생시기와 생육단계를 기준으로 한 예찰 목록입니다. 실제 자동추천은 현재 기상·최근 관찰기록을 더해 우선순위를 조정하고, 예찰진단에서 사진·증상·발생범위를 수집해 진단엔진으로 다시 판정합니다. 농약 제품·농도·혼용·재살포 간격은 자동 처방하지 않습니다.'),
+          title: Text('영양·비료 계획은 분석값으로 보정합니다'),
+          subtitle: Text('월별 영양항목은 “확인할 시기”를 보여주는 기본 가이드입니다. 실제 투입 여부와 양은 토양검정·엽분석·수세·착과량·과거 시비기록을 함께 보고 결정해야 합니다. 과다 시비와 미량원소 과잉도 생육·품질 문제를 만들 수 있으므로 고정 처방으로 사용하지 않습니다.'),
         )),
       ],
     );
