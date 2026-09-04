@@ -1,8 +1,11 @@
 import os
+import math
+import re
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import Optional
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import (
@@ -12,6 +15,9 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 TZ = ZoneInfo("Asia/Seoul")
+KMA_SERVICE_KEY = os.getenv("KMA_SERVICE_KEY", "").strip()
+KMA_URL = "https://apihub.kma.go.kr/api/typ02/openApi/VilageFcstInfoService_2.0/getVilageFcst"
+
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = "postgresql://" + DATABASE_URL[len("postgres://"):]
@@ -85,7 +91,7 @@ work_events = Table(
     Column("created_at", String(40), nullable=False),
 )
 
-app = FastAPI(title="Apple Farm Assistant API", version="4.0.0")
+app = FastAPI(title="Apple Farm Assistant API", version="4.1.0")
 
 
 def now_iso() -> str:
@@ -168,6 +174,134 @@ def demo_weather():
     return out
 
 
+def latlon_to_grid(lat: float, lon: float):
+    re_km = 6371.00877
+    grid_km = 5.0
+    slat1 = 30.0
+    slat2 = 60.0
+    olon = 126.0
+    olat = 38.0
+    xo = 43.0
+    yo = 136.0
+    degrad = math.pi / 180.0
+    re_grid = re_km / grid_km
+    slat1 *= degrad
+    slat2 *= degrad
+    olon *= degrad
+    olat *= degrad
+    sn = math.tan(math.pi * 0.25 + slat2 * 0.5) / math.tan(math.pi * 0.25 + slat1 * 0.5)
+    sn = math.log(math.cos(slat1) / math.cos(slat2)) / math.log(sn)
+    sf = math.tan(math.pi * 0.25 + slat1 * 0.5)
+    sf = math.pow(sf, sn) * math.cos(slat1) / sn
+    ro = math.tan(math.pi * 0.25 + olat * 0.5)
+    ro = re_grid * sf / math.pow(ro, sn)
+    ra = math.tan(math.pi * 0.25 + lat * degrad * 0.5)
+    ra = re_grid * sf / math.pow(ra, sn)
+    theta = lon * degrad - olon
+    if theta > math.pi:
+        theta -= 2.0 * math.pi
+    if theta < -math.pi:
+        theta += 2.0 * math.pi
+    theta *= sn
+    x = int(ra * math.sin(theta) + xo + 0.5)
+    y = int(ro - ra * math.cos(theta) + yo + 0.5)
+    return x, y
+
+
+def latest_kma_base(now: Optional[datetime] = None):
+    now = now or datetime.now(TZ)
+    safe = now - timedelta(minutes=45)
+    issue_hours = [2, 5, 8, 11, 14, 17, 20, 23]
+    candidates = []
+    for day_delta in (0, -1):
+        d = (safe + timedelta(days=day_delta)).date()
+        for hour in issue_hours:
+            candidates.append(datetime(d.year, d.month, d.day, hour, tzinfo=TZ))
+    base = max(x for x in candidates if x <= safe)
+    return base.strftime("%Y%m%d"), base.strftime("%H00")
+
+
+def parse_number(value, default=0.0):
+    if value is None:
+        return default
+    text = str(value).strip()
+    if text in {"", "강수없음", "적설없음"}:
+        return 0.0
+    m = re.search(r"-?\d+(?:\.\d+)?", text)
+    return float(m.group()) if m else default
+
+
+def fetch_kma_forecast(nx: int, ny: int):
+    if not KMA_SERVICE_KEY:
+        return None, "KMA_SERVICE_KEY가 설정되지 않았습니다"
+    base_date, base_time = latest_kma_base()
+    params = {
+        "pageNo": 1,
+        "numOfRows": 1000,
+        "dataType": "JSON",
+        "base_date": base_date,
+        "base_time": base_time,
+        "nx": nx,
+        "ny": ny,
+        "authKey": KMA_SERVICE_KEY,
+    }
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            r = client.get(KMA_URL, params=params)
+            r.raise_for_status()
+            payload = r.json()
+        header = payload.get("response", {}).get("header", {})
+        if str(header.get("resultCode", "00")) != "00":
+            return None, f"기상청 응답 오류: {header.get('resultMsg', 'unknown')}"
+        items = payload.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+        if not items:
+            return None, "기상청 예보 데이터가 비어 있습니다"
+        grouped = {}
+        for item in items:
+            key = (str(item.get("fcstDate", "")), str(item.get("fcstTime", "")).zfill(4))
+            grouped.setdefault(key, {})[str(item.get("category", ""))] = item.get("fcstValue")
+        out = []
+        now = datetime.now(TZ) - timedelta(hours=1)
+        for (date_s, time_s), values in sorted(grouped.items()):
+            try:
+                dt = datetime.strptime(date_s + time_s, "%Y%m%d%H%M").replace(tzinfo=TZ)
+            except ValueError:
+                continue
+            if dt < now:
+                continue
+            out.append({
+                "time": dt.strftime("%m-%d %H:%M"),
+                "temp": parse_number(values.get("TMP")),
+                "humidity": parse_number(values.get("REH")),
+                "wind": parse_number(values.get("WSD")),
+                "rain_probability": parse_number(values.get("POP")),
+                "rain": parse_number(values.get("PCP")),
+            })
+            if len(out) >= 18:
+                break
+        if not out:
+            return None, "사용 가능한 미래 예보 시간이 없습니다"
+        return out, None
+    except Exception as e:
+        return None, f"기상청 호출 실패: {type(e).__name__}"
+
+
+def orchard_weather(orchard_name: str):
+    with engine.connect() as c:
+        row = c.execute(select(orchards).where(orchards.c.name == orchard_name)).mappings().first()
+    if not row:
+        return demo_weather(), "demo", "과수원 위치가 등록되지 않아 데모 날씨를 사용합니다", None
+    nx, ny = row.get("nx"), row.get("ny")
+    if (nx is None or ny is None) and row.get("lat") is not None and row.get("lon") is not None:
+        nx, ny = latlon_to_grid(float(row["lat"]), float(row["lon"]))
+    if nx is None or ny is None:
+        return demo_weather(), "demo", "과수원 좌표(nx/ny 또는 위경도)가 없어 데모 날씨를 사용합니다", None
+    weather, error = fetch_kma_forecast(int(nx), int(ny))
+    if weather:
+        return weather, "kma", None, {"nx": int(nx), "ny": int(ny)}
+    return demo_weather(), "demo", error or "기상청 데이터를 가져오지 못해 데모 날씨를 사용합니다", {"nx": int(nx), "ny": int(ny)}
+
+
 def work_score(w):
     score = 100
     pop = float(w.get("rain_probability", 0) or 0)
@@ -206,7 +340,14 @@ def health():
         db_ok = True
     except Exception:
         db_ok = False
-    return {"ok": True, "version": "4.0.0", "time": now_iso(), "database": db_kind, "database_ok": db_ok}
+    return {
+        "ok": True,
+        "version": "4.1.0",
+        "time": now_iso(),
+        "database": db_kind,
+        "database_ok": db_ok,
+        "kma_configured": bool(KMA_SERVICE_KEY),
+    }
 
 
 @app.get("/api/orchards")
@@ -345,6 +486,12 @@ def survivor_advice(x: WeedAdviceIn):
     return {"possible_causes": causes, "actions": actions}
 
 
+@app.get("/api/weather")
+def weather(orchard: str = "A과수원"):
+    data, source, warning, grid = orchard_weather(orchard)
+    return {"orchard": orchard, "weather": data, "weather_source": source, "weather_warning": warning, "grid": grid}
+
+
 @app.get("/api/dashboard")
 def dashboard(orchard: str = "A과수원"):
     with engine.connect() as c:
@@ -369,8 +516,8 @@ def dashboard(orchard: str = "A과수원"):
     task_list = [dict(r) for r in task_rows]
     obs_list = [dict(r) for r in obs_rows]
     risk_score = sum(int(o.get("risk", 0)) for o in obs_list)
-    weather = demo_weather()
-    best = sorted([work_score(w) for w in weather], key=lambda x: x["score"], reverse=True)[:5]
+    weather_data, source, warning, grid = orchard_weather(orchard)
+    best = sorted([work_score(w) for w in weather_data], key=lambda x: x["score"], reverse=True)[:5]
     return {
         "orchard": orchard,
         "risk_score": risk_score,
@@ -378,7 +525,9 @@ def dashboard(orchard: str = "A과수원"):
         "tasks": task_list,
         "observations": obs_list,
         "best_work_times": best,
-        "weather_source": "demo",
+        "weather_source": source,
+        "weather_warning": warning,
+        "weather_grid": grid,
         "server_time": now_iso(),
         "database": "postgresql" if DATABASE_URL.startswith("postgresql") else "sqlite",
     }
