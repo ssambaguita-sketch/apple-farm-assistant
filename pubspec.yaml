@@ -1,0 +1,14 @@
+name: apple_farm_assistant
+description: Final Apple Farm Assistant
+publish_to: 'none'
+version: 2.0.0+20
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.2
+  geolocator: ^13.0.1
+  image_picker: ^1.1.2
+flutter:
+  uses-material-design: true
