@@ -8,6 +8,8 @@ class RecommendationDiagnosisApi {
     required String orchard,
     required String specificThreat,
     required String threatType,
+    String? zoneName,
+    String? variety,
   }) async {
     final selected = OrchardSelection.name.trim().isNotEmpty ? OrchardSelection.name : orchard;
     try {
@@ -19,6 +21,8 @@ class RecommendationDiagnosisApi {
               'orchard': selected,
               'specific_threat': specificThreat,
               'threat_type': threatType,
+              'zone_name': zoneName,
+              'variety': variety,
             }),
           )
           .timeout(const Duration(seconds: 25));
