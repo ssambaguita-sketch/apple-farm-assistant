@@ -7,6 +7,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 1, 'stage': '휴면기', 'goal': '연간계획·시설점검',
       'tasks': ['전년도 기록 정리', '올해 작업계획 수립', '농기계·시설 점검'],
+      'predicted': ['월동 해충 흔적', '병든 가지·월동 감염원', '동해·수피 갈라짐', '전년도 결핍 반복구역'],
       'nutrition': ['전년도 결핍·엽분석·토양검정 기록 검토', '올해 토양·엽 분석 계획 수립'],
       'pest': ['월동 해충 흔적·알·피해가지 점검', '전년도 다발생 구역 표시'],
       'disease': ['병든 가지·과실 잔재·월동 감염원 점검'],
@@ -15,6 +16,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 2, 'stage': '휴면기', 'goal': '동계전정',
       'tasks': ['동계전정', '수형 정리', '가지·수간 상태 점검'],
+      'predicted': ['사과응애 월동알', '사과면충·깍지벌레류', '궤양성 병반', '동해·가지 갈라짐'],
       'nutrition': ['수세 불균형 구역 확인', '전년도 미량원소 결핍 의심 나무 표시'],
       'pest': ['전정 중 월동 해충·피해가지 확인'],
       'disease': ['전정 중 궤양·고사·병든 가지 확인'],
@@ -23,6 +25,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 3, 'stage': '발아 준비', 'goal': '발아 전 준비',
       'tasks': ['전정 마무리', '유인·지주 점검', '토양·배수 상태 확인'],
+      'predicted': ['검은별무늬병', '점무늬낙엽병', '사과응애 월동알', '사과면충·깍지벌레류', '늦서리·배수불량'],
       'nutrition': ['토양 pH·배수 상태와 결핍 위험 함께 확인', '발아 전 수세·눈 상태 비교'],
       'pest': ['발아 전 월동해충 예찰 강화'],
       'disease': ['병든 조직·낙엽 잔재 재점검'],
@@ -31,6 +34,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 4, 'stage': '발아·개화', 'goal': '개화·저온 관리',
       'tasks': ['꽃눈·개화 상태 관찰', '저온·서리 위험 확인', '수분 상태 관찰'],
+      'predicted': ['검은별무늬병', '점무늬낙엽병', '사과혹진딧물', '잎말이나방류', '철 결핍', '붕소 등 미량원소 불균형', '저온·서리 피해'],
       'nutrition': ['새잎 황화·왜소·기형 등 Fe/Zn/B 계열 의심증상 예찰', '새잎과 정상잎 비교 촬영'],
       'pest': ['개화기 해충 발생 여부 예찰', '수분곤충 활동 중 살충 작업 주의'],
       'disease': ['강우·고습 뒤 꽃·잎 병반 발생 여부 점검'],
@@ -39,6 +43,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 5, 'stage': '착과', 'goal': '착과·적과 시작',
       'tasks': ['착과 상태 확인', '적과 시작', '신초·병해충 예찰'],
+      'predicted': ['갈색무늬병', '붉은별무늬병', '점무늬낙엽병', '복숭아순나방', '사과응애', '철 결핍', '붕소 등 미량원소 불균형', '강풍·과습·착과 스트레스'],
       'nutrition': ['신초 황화·잎맥간 황화·잎끝 마름 예찰', '착과 불량과 영양·수분 스트레스 구분'],
       'pest': ['진딧물·응애·나방류 등 실제 개체·식흔 예찰', '피해 잎·과실 비율 기록'],
       'disease': ['낙화 후 잎·과실 병반을 주 1회 이상 확인'],
@@ -47,6 +52,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 6, 'stage': '초기 과실비대', 'goal': '과실비대 관리',
       'tasks': ['적과 마무리', '유인 작업', '관수·토양수분 점검', '잡초 관리'],
+      'predicted': ['갈색무늬병', '겹무늬썩음병', '탄저병', '복숭아순나방', '사과응애', '마그네슘 결핍', '칼륨 불균형', '과습·수분 스트레스'],
       'nutrition': ['오래된 잎 황화·잎맥간 황화 등 Mg/K 계열 패턴 예찰', '과실비대 편차·수세 차이 기록'],
       'pest': ['응애·흡즙해충·과실가해 해충 예찰', '트랩이 있으면 포획량 추세 기록'],
       'disease': ['장마 전후 잎·과실 반점과 확산속도 점검'],
@@ -55,6 +61,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 7, 'stage': '과실비대', 'goal': '고온·수분 관리',
       'tasks': ['고온·가뭄 대응', '관수 필요성 점검', '잡초 관리', '과실·가지 예찰'],
+      'predicted': ['탄저병', '갈색무늬병', '겹무늬썩음병', '사과응애', '복숭아순나방', '노린재류', '마그네슘 결핍', '칼륨 불균형', '고온·일소·가뭄 스트레스'],
       'nutrition': ['고온기 황화·엽연괴사와 실제 결핍을 구분', 'Ca/Mg/K 불균형 의심 시 증상 분포 기록'],
       'pest': ['응애·나방류 등 개체수와 피해 증가속도 집중 예찰'],
       'disease': ['고온다습·강우 뒤 병반 확대 여부 집중 확인'],
@@ -63,6 +70,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 8, 'stage': '과실비대·착색 준비', 'goal': '수확 전 품질관리',
       'tasks': ['과실 상태 확인', '가지 처짐·지주 점검', '착색 준비'],
+      'predicted': ['탄저병', '갈색무늬병', '겹무늬썩음병', '복숭아순나방', '노린재류', '사과응애', '마그네슘 결핍', '칼륨 불균형', '일소·강풍·낙과 스트레스'],
       'nutrition': ['잎 황화·과실 품질 저하가 결핍인지 노화인지 구분', '필요 시 엽분석 검토'],
       'pest': ['과실 피해 흔적·해충 개체수 점검'],
       'disease': ['과실 반점·부패·잎 병반 재확인'],
@@ -71,6 +79,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 9, 'stage': '착색·성숙', 'goal': '수확 준비',
       'tasks': ['착색 상태 확인', '성숙도 관찰', '낙과·강풍 위험 점검', '수확 계획'],
+      'predicted': ['탄저병', '갈색무늬병', '겹무늬썩음병', '복숭아순나방', '노린재류', '마그네슘 결핍', '칼륨 불균형', '태풍·강풍·낙과 스트레스'],
       'nutrition': ['늦은 황화·엽연마름은 자연노화와 구분', '수확 전 불필요한 교정 살포 지양'],
       'pest': ['수확 전 피해과·해충 밀도 확인', '안전사용기준 확인이 필요한 시기'],
       'disease': ['수확 전 과실 병반·부패 위험 점검'],
@@ -79,6 +88,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 10, 'stage': '본격 수확', 'goal': '수확·선별·출하',
       'tasks': ['수확 적기 확인', '수확', '선별·출하', '수확량 기록'],
+      'predicted': ['갈색무늬병', '과실 부패성 병해', '잔존 해충 피해과', '강우·저온 수확 스트레스'],
       'nutrition': ['수확기 결핍 증상은 위치·나무별로 기록해 다음 해 분석자료로 사용'],
       'pest': ['피해과 비율·해충 흔적 기록'],
       'disease': ['부패·병반 과실 비율 기록'],
@@ -87,6 +97,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 11, 'stage': '수확 후', 'goal': '수확 후 정리',
       'tasks': ['수확 마무리', '낙엽·잔재 관리', '수세·수확 결과 기록'],
+      'predicted': ['월동 해충 발생구역', '병든 잎·과실·가지 감염원', '결핍 의심 반복구역', '배수·토양구조 취약구역'],
       'nutrition': ['엽색·수세·수확량 차이를 구역별로 정리', '토양·엽 분석 필요 구역 선정'],
       'pest': ['피해가 많았던 나무·구역 표시'],
       'disease': ['병든 잎·과실·가지와 발생구역 기록'],
@@ -95,6 +106,7 @@ class AnnualFlowPage extends StatelessWidget {
     {
       'm': 12, 'stage': '휴면 진입', 'goal': '결산·다음 해 준비',
       'tasks': ['비용·수익 결산', '작업기록 분석', '다음 해 개선계획'],
+      'predicted': ['동해', '월동 해충', '월동 감염원', '반복 결핍 위험구역'],
       'nutrition': ['결핍 의심 사진·분석결과·시비기록 종합', '다음 해 검사·보정 계획 수립'],
       'pest': ['연간 해충 발생시기·밀도·피해량 정리'],
       'disease': ['연간 병 발생시기·기상조건·피해구역 정리'],
@@ -115,10 +127,29 @@ class AnnualFlowPage extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Row(children: [Icon(icon, size: 18), const SizedBox(width: 6), Text(title, style: const TextStyle(fontWeight: FontWeight.bold))]),
+            child: Row(children: [Icon(icon, size: 18), const SizedBox(width: 6), Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)))]),
           ),
           ...items.map((x) => ListTile(dense: true, visualDensity: VisualDensity.compact, leading: const Icon(Icons.arrow_right), title: Text(x))),
         ],
+      );
+
+  Widget _predictedThreats(List<String> items, {bool current = false}) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(Icons.crisis_alert_outlined, size: 19),
+            const SizedBox(width: 6),
+            Text(current ? '이번 달 예측 위협 후보' : '시기별 예측 위협 후보', style: const TextStyle(fontWeight: FontWeight.bold)),
+          ]),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 7,
+            runSpacing: 7,
+            children: items.map((x) => Chip(label: Text(x), avatar: const Icon(Icons.search, size: 16))).toList(),
+          ),
+          const SizedBox(height: 6),
+          const Text('시기 기반 예찰 후보이며 확진이 아닙니다. 현재 기상·관찰기록과 카메라 현장진단으로 우선순위를 다시 판정합니다.', style: TextStyle(fontSize: 12)),
+        ]),
       );
 
   @override
@@ -133,7 +164,7 @@ class AnnualFlowPage extends StatelessWidget {
       children: [
         Text('📅 연간 농작업', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        const Text('농작업뿐 아니라 영양결핍·병해충·환경위협 예찰 시기도 함께 봅니다.'),
+        const Text('농작업·예찰 시기와 함께 그 시기에 우선 확인할 구체 위협 후보를 봅니다.'),
         const SizedBox(height: 12),
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${now.year}년 농사 진행도', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -142,6 +173,8 @@ class AnnualFlowPage extends StatelessWidget {
           Text('현재 단계: ${current['stage']}'),
           Text('이번 달 핵심목표: ${current['goal']}', style: const TextStyle(fontWeight: FontWeight.bold)),
         ]))),
+        const SizedBox(height: 6),
+        Card(child: _predictedThreats(current['predicted'] as List<String>, current: true)),
         const SizedBox(height: 6),
         const Text('이번 달 예찰 포인트', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         Card(child: Column(children: [
@@ -162,6 +195,7 @@ class AnnualFlowPage extends StatelessWidget {
             title: Text('$month월 · ${item['stage']}', style: TextStyle(fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal)),
             subtitle: Text('${item['goal']}${isCurrent ? ' · 현재' : isPast ? ' · 지난 단계' : ''}'),
             children: [
+              _predictedThreats(item['predicted'] as List<String>, current: isCurrent),
               _section(Icons.agriculture_outlined, '핵심 농작업', item['tasks'] as List<String>),
               _section(Icons.science_outlined, '영양결핍 예찰', item['nutrition'] as List<String>),
               _section(Icons.bug_report_outlined, '해충 위협 예찰', item['pest'] as List<String>),
@@ -173,8 +207,8 @@ class AnnualFlowPage extends StatelessWidget {
         const SizedBox(height: 8),
         const Card(child: ListTile(
           leading: Icon(Icons.info_outline),
-          title: Text('시기는 기본 가이드입니다'),
-          subtitle: Text('지역·품종·기상·실제 생육단계에 따라 예찰 시기는 앞뒤로 조정해야 합니다. 사진 증상은 결핍·병해·해충·환경장해 후보를 구분하는 근거로 사용하고, 결핍 확정은 토양·엽 분석이 더 강한 근거입니다. 농약 제품·농도·혼용·재살포 간격은 자동 처방하지 않습니다.'),
+          title: Text('예측 위협은 진단 대상 후보입니다'),
+          subtitle: Text('월별 후보는 기본 발생시기와 생육단계를 기준으로 한 예찰 목록입니다. 실제 자동추천은 현재 기상·최근 관찰기록을 더해 우선순위를 조정하고, 예찰진단에서 사진·증상·발생범위를 수집해 진단엔진으로 다시 판정합니다. 농약 제품·농도·혼용·재살포 간격은 자동 처방하지 않습니다.'),
         )),
       ],
     );
