@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'services/orchard_api.dart';
 import 'services/orchard_selection.dart';
+import 'services/orchard_zone_api.dart';
 
 class OrchardManagerPage extends StatefulWidget {
   const OrchardManagerPage({super.key});
@@ -12,6 +13,7 @@ class OrchardManagerPage extends StatefulWidget {
 
 class _OrchardManagerPageState extends State<OrchardManagerPage> {
   final api = OrchardApi();
+  final zoneApi = OrchardZoneApi();
   final varieties = const ['후지', '홍로', '감홍', '아리수', '시나노골드', '루비에스', '기타'];
   List<Map<String, dynamic>> items = [];
   bool loading = false;
@@ -77,9 +79,9 @@ class _OrchardManagerPageState extends State<OrchardManagerPage> {
                 )).toList(),
               ),
               const SizedBox(height: 12),
-              TextField(controller: area, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '면적 ㎡ (선택)')),
-              TextField(controller: trees, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '나무 수 (선택)')),
-              TextField(controller: stage, decoration: const InputDecoration(labelText: '현재 생육단계 (선택)')),
+              TextField(controller: area, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '과수원 전체 면적 ㎡')),
+              TextField(controller: trees, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '과수원 전체 나무 수')),
+              TextField(controller: stage, decoration: const InputDecoration(labelText: '대표 생육단계')),
             ]),
           ),
           actions: [
@@ -96,7 +98,7 @@ class _OrchardManagerPageState extends State<OrchardManagerPage> {
                         growthStage: stage.text.trim(),
                       )
                     : await api.update(
-                        id: existing['id'] as int,
+                        id: (existing['id'] as num).toInt(),
                         name: name.text.trim(),
                         varieties: selected.toList(),
                         areaM2: double.tryParse(area.text.trim()) ?? 0,
@@ -129,6 +131,18 @@ class _OrchardManagerPageState extends State<OrchardManagerPage> {
     setState(() => message = '${item['name']}을(를) 현재 과수원으로 선택했습니다.');
   }
 
+  Future<void> manageZones(Map<String, dynamic> orchard) async {
+    final orchardName = '${orchard['name']}';
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => _OrchardZonePage(
+        orchardName: orchardName,
+        allowedVarieties: _parseVarieties(orchard['variety']).isEmpty
+            ? varieties
+            : _parseVarieties(orchard['variety']),
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) => ListView(
         padding: const EdgeInsets.all(16),
@@ -137,7 +151,7 @@ class _OrchardManagerPageState extends State<OrchardManagerPage> {
             const Expanded(child: Text('🍎 과수원 · 품종 관리', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
             IconButton(onPressed: loading ? null : load, icon: const Icon(Icons.refresh)),
           ]),
-          const Text('여러 과수원을 등록하고, 과수원마다 한 개 이상의 사과 품종을 지정할 수 있습니다.'),
+          const Text('여러 과수원을 등록하고, 각 과수원 안에서 품종별 구역·나무 수·생육단계를 따로 관리합니다.'),
           const SizedBox(height: 10),
           ValueListenableBuilder<String>(
             valueListenable: OrchardSelection.notifier,
@@ -156,23 +170,176 @@ class _OrchardManagerPageState extends State<OrchardManagerPage> {
           ...items.map((item) {
             final isSelected = OrchardSelection.name == '${item['name']}';
             return Card(
-              child: ListTile(
-                leading: Icon(isSelected ? Icons.check_circle : Icons.park_outlined),
-                title: Text('${item['name']}', style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
-                subtitle: Text('품종: ${item['variety'] ?? '미지정'}\n나무 ${item['tree_count'] ?? 0}주 · 면적 ${item['area_m2'] ?? 0}㎡ · ${item['growth_stage'] ?? ''}'),
-                isThreeLine: true,
-                onTap: () => selectItem(item),
-                trailing: IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => edit(item)),
-              ),
+              child: Column(children: [
+                ListTile(
+                  leading: Icon(isSelected ? Icons.check_circle : Icons.park_outlined),
+                  title: Text('${item['name']}', style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                  subtitle: Text('품종: ${item['variety'] ?? '미지정'}\n전체 ${item['tree_count'] ?? 0}주 · ${item['area_m2'] ?? 0}㎡ · ${item['growth_stage'] ?? ''}'),
+                  isThreeLine: true,
+                  onTap: () => selectItem(item),
+                  trailing: IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => edit(item)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => manageZones(item),
+                      icon: const Icon(Icons.grid_view_outlined),
+                      label: const Text('품종별 구역 · 나무 수 관리'),
+                    ),
+                  ),
+                ),
+              ]),
             );
           }),
           const Card(
             child: ListTile(
               leading: Icon(Icons.info_outline),
-              title: Text('현재 과수원 선택'),
-              subtitle: Text('선택한 과수원은 앱에 저장됩니다. 홈 브리핑과 작업 목록은 선택된 과수원을 기준으로 불러오도록 연결됩니다.'),
+              title: Text('구역 정보는 자동추천과 예찰진단에 사용'),
+              subtitle: Text('예: A구역 홍로 80주, B구역 후지 150주처럼 등록하면 자동추천이 우선 확인할 구역과 품종·나무 수를 함께 표시할 수 있습니다.'),
             ),
           ),
         ],
       );
+}
+
+class _OrchardZonePage extends StatefulWidget {
+  const _OrchardZonePage({required this.orchardName, required this.allowedVarieties});
+  final String orchardName;
+  final List<String> allowedVarieties;
+
+  @override
+  State<_OrchardZonePage> createState() => _OrchardZonePageState();
+}
+
+class _OrchardZonePageState extends State<_OrchardZonePage> {
+  final api = OrchardZoneApi();
+  List<Map<String, dynamic>> zones = [];
+  bool loading = false;
+  String message = '';
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    setState(() => loading = true);
+    final r = await api.list(widget.orchardName);
+    if (!mounted) return;
+    setState(() {
+      zones = r;
+      loading = false;
+    });
+  }
+
+  Future<void> editZone([Map<String, dynamic>? existing]) async {
+    final name = TextEditingController(text: '${existing?['zone_name'] ?? ''}');
+    final trees = TextEditingController(text: '${existing?['tree_count'] ?? 0}');
+    final area = TextEditingController(text: '${existing?['area_m2'] ?? 0}');
+    final stage = TextEditingController(text: '${existing?['growth_stage'] ?? ''}');
+    final note = TextEditingController(text: '${existing?['note'] ?? ''}');
+    String variety = '${existing?['variety'] ?? (widget.allowedVarieties.isNotEmpty ? widget.allowedVarieties.first : '후지')}';
+    if (!widget.allowedVarieties.contains(variety) && widget.allowedVarieties.isNotEmpty) variety = widget.allowedVarieties.first;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(existing == null ? '품종 구역 추가' : '품종 구역 수정'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: name, decoration: const InputDecoration(labelText: '구역 이름 예: A구역, 남쪽 1블록')),
+              DropdownButtonFormField<String>(
+                value: variety,
+                decoration: const InputDecoration(labelText: '품종'),
+                items: widget.allowedVarieties.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                onChanged: (v) => setDialogState(() => variety = v ?? variety),
+              ),
+              TextField(controller: trees, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '나무 수')),
+              TextField(controller: area, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '구역 면적 ㎡')),
+              TextField(controller: stage, decoration: const InputDecoration(labelText: '현재 생육단계')),
+              TextField(controller: note, decoration: const InputDecoration(labelText: '메모')),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+            FilledButton(
+              onPressed: () async {
+                if (name.text.trim().isEmpty || variety.trim().isEmpty) return;
+                final result = existing == null
+                    ? await api.create(
+                        orchard: widget.orchardName,
+                        zoneName: name.text.trim(),
+                        variety: variety,
+                        treeCount: int.tryParse(trees.text.trim()) ?? 0,
+                        areaM2: double.tryParse(area.text.trim()) ?? 0,
+                        growthStage: stage.text.trim(),
+                        note: note.text.trim(),
+                      )
+                    : await api.update(
+                        id: (existing['id'] as num).toInt(),
+                        zoneName: name.text.trim(),
+                        variety: variety,
+                        treeCount: int.tryParse(trees.text.trim()) ?? 0,
+                        areaM2: double.tryParse(area.text.trim()) ?? 0,
+                        growthStage: stage.text.trim(),
+                        note: note.text.trim(),
+                      );
+                if (!context.mounted) return;
+                if (result['error'] != null) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${result['error']}')));
+                  return;
+                }
+                Navigator.pop(context, true);
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved == true) await load();
+  }
+
+  Future<void> removeZone(Map<String, dynamic> zone) async {
+    final ok = await api.delete((zone['id'] as num).toInt());
+    if (!mounted) return;
+    setState(() => message = ok ? '구역을 삭제했습니다.' : '구역 삭제에 실패했습니다.');
+    if (ok) await load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalTrees = zones.fold<int>(0, (sum, z) => sum + ((z['tree_count'] as num?)?.toInt() ?? 0));
+    return Scaffold(
+      appBar: AppBar(title: Text('${widget.orchardName} · 품종 구역')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(child: ListTile(
+            leading: const Icon(Icons.account_tree_outlined),
+            title: Text('등록 구역 ${zones.length}개 · 총 $totalTrees주'),
+            subtitle: const Text('자동추천은 이 정보를 이용해 우선 예찰 구역을 지정합니다.'),
+          )),
+          FilledButton.icon(onPressed: () => editZone(), icon: const Icon(Icons.add), label: const Text('구역 추가')),
+          if (message.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(message)),
+          if (loading) const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator())),
+          if (!loading && zones.isEmpty) const Card(child: ListTile(title: Text('아직 품종 구역이 없습니다.'))),
+          ...zones.map((z) => Card(
+            child: ListTile(
+              leading: const Icon(Icons.grid_view_outlined),
+              title: Text('${z['zone_name']} · ${z['variety']}'),
+              subtitle: Text('${z['tree_count'] ?? 0}주 · ${z['area_m2'] ?? 0}㎡\n생육단계 ${z['growth_stage'] ?? '-'}${'${z['note'] ?? ''}'.trim().isNotEmpty ? '\n${z['note']}' : ''}'),
+              isThreeLine: true,
+              onTap: () => editZone(z),
+              trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => removeZone(z)),
+            ),
+          )),
+        ],
+      ),
+    );
+  }
 }
