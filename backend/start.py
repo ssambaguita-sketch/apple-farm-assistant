@@ -4,6 +4,7 @@ import annual_today  # injects annual flow into today's recommendations
 import threat_titles  # makes broad threat types explicit in recommendation titles
 import specific_threats  # refines broad threats into concrete seasonal scouting candidates
 import recommendation_diagnosis  # runs diagnosis pre-checks for recommendation candidates
+import behavior_coach  # non-diagnostic behavioral screening and coaching
 
 app = base_app.app
-app.version = "5.0.0"
+app.version = "5.1.0"
