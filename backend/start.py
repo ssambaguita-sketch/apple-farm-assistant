@@ -8,6 +8,7 @@ import recommendation_zones  # targets recommendations to concrete orchard zones
 import recommendation_diagnosis  # runs diagnosis pre-checks for recommendation candidates
 import behavior_coach  # non-diagnostic behavioral screening and coaching
 import orchard_management  # multi-orchard and multi-variety management
+import weed_intelligence  # camera-assisted weed timing and history analysis
 
 app = base_app.app
-app.version = "5.4.0-dev"
+app.version = "5.5.0"
