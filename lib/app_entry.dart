@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'main.dart' as legacy;
-import 'annual_flow_page.dart';
+import 'variety_annual_flow_page.dart';
 import 'recommendation_diagnosis_page.dart';
 import 'behavior_coach_page.dart';
 import 'orchard_manager_page.dart';
@@ -40,7 +40,7 @@ class _AnnualHomeState extends State<AnnualHome> {
 
   List<Widget> get pages => const [
         legacy.DashboardPage(),
-        AnnualFlowPage(),
+        VarietyAnnualFlowPage(),
         RecommendationDiagnosisPage(),
         legacy.TaskPage(),
         legacy.WeedPage(),
