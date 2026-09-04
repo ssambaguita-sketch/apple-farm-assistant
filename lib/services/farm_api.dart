@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'orchard_selection.dart';
 
 class FarmApi {
   static const _key = 'api_base_url';
@@ -26,6 +27,8 @@ class FarmApi {
     await p.setString(_key, _baseUrl);
   }
 
+  String _selected(String fallback) => OrchardSelection.name.trim().isNotEmpty ? OrchardSelection.name : fallback;
+
   Future<bool> health() async {
     try {
       final r = await http.get(Uri.parse('$_baseUrl/health')).timeout(const Duration(seconds: 25));
@@ -36,6 +39,7 @@ class FarmApi {
   }
 
   Future<Map<String, dynamic>> diagnostics(String orchard) async {
+    final selected = _selected(orchard);
     final result = <String, dynamic>{
       'server': false,
       'database': false,
@@ -60,7 +64,7 @@ class FarmApi {
       (result['messages'] as List<String>).add('서버 상태 확인 실패');
     }
     try {
-      final u = Uri.parse('$_baseUrl/api/weather').replace(queryParameters: {'orchard': orchard});
+      final u = Uri.parse('$_baseUrl/api/weather').replace(queryParameters: {'orchard': selected});
       final r = await http.get(u).timeout(const Duration(seconds: 25));
       if (r.statusCode == 200) {
         final j = Map<String, dynamic>.from(jsonDecode(r.body));
@@ -73,7 +77,7 @@ class FarmApi {
       (result['messages'] as List<String>).add('날씨 API 확인 실패');
     }
     try {
-      final u = Uri.parse('$_baseUrl/api/tasks').replace(queryParameters: {'orchard': orchard});
+      final u = Uri.parse('$_baseUrl/api/tasks').replace(queryParameters: {'orchard': selected});
       final r = await http.get(u).timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) {
         result['tasks'] = true;
@@ -89,6 +93,7 @@ class FarmApi {
     } catch (_) {
       (result['messages'] as List<String>).add('코치 API 확인 실패');
     }
+    result['orchard'] = selected;
     return result;
   }
 
@@ -97,12 +102,13 @@ class FarmApi {
     required double lat,
     required double lon,
   }) async {
+    final selected = _selected(orchard);
     try {
       final r = await http
           .post(
             Uri.parse('$_baseUrl/api/orchards/location'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'orchard': orchard, 'lat': lat, 'lon': lon}),
+            body: jsonEncode({'orchard': selected, 'lat': lat, 'lon': lon}),
           )
           .timeout(const Duration(seconds: 25));
       return r.statusCode >= 200 && r.statusCode < 300;
@@ -123,12 +129,13 @@ class FarmApi {
       };
 
   Future<Map<String, dynamic>> dashboard(String orchard) async {
+    final selected = _selected(orchard);
     try {
-      final u = Uri.parse('$_baseUrl/api/dashboard').replace(queryParameters: {'orchard': orchard});
+      final u = Uri.parse('$_baseUrl/api/dashboard').replace(queryParameters: {'orchard': selected});
       final r = await http.get(u).timeout(const Duration(seconds: 25));
       if (r.statusCode == 200) return Map<String, dynamic>.from(jsonDecode(r.body));
     } catch (_) {}
-    return _demoDashboard(orchard);
+    return _demoDashboard(selected);
   }
 
   Future<List<dynamic>> orchards() async {
@@ -140,8 +147,9 @@ class FarmApi {
   }
 
   Future<List<dynamic>> tasks(String orchard) async {
+    final selected = _selected(orchard);
     try {
-      final u = Uri.parse('$_baseUrl/api/tasks').replace(queryParameters: {'orchard': orchard});
+      final u = Uri.parse('$_baseUrl/api/tasks').replace(queryParameters: {'orchard': selected});
       final r = await http.get(u).timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) return jsonDecode(r.body);
     } catch (_) {}
@@ -149,10 +157,11 @@ class FarmApi {
   }
 
   Future<bool> addTask({required String orchard, required String title, String category = '일반', int priority = 2, String? scheduledAt}) async {
+    final selected = _selected(orchard);
     try {
       final r = await http
           .post(Uri.parse('$_baseUrl/api/tasks'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({
-        'orchard': orchard,
+        'orchard': selected,
         'title': title,
         'category': category,
         'priority': priority,
@@ -190,9 +199,11 @@ class FarmApi {
   }
 
   Future<Map<String, dynamic>> survivorAdvice(Map<String, dynamic> data) async {
+    final payload = Map<String, dynamic>.from(data);
+    payload['orchard'] = OrchardSelection.name;
     try {
       final r = await http
-          .post(Uri.parse('$_baseUrl/api/weeds/survivor-advice'), headers: {'Content-Type': 'application/json'}, body: jsonEncode(data))
+          .post(Uri.parse('$_baseUrl/api/weeds/survivor-advice'), headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
           .timeout(const Duration(seconds: 20));
       if (r.statusCode == 200) return Map<String, dynamic>.from(jsonDecode(r.body));
     } catch (_) {}
