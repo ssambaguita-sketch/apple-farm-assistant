@@ -68,11 +68,82 @@ class _DashboardPageState extends State<DashboardPage> {
     load();
   }
 
+  Widget _evidenceRow(IconData icon, String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 8),
+          Expanded(child: Text('$label: $value')),
+        ]),
+      );
+
+  Widget _recommendationCard(dynamic raw) {
+    final x = Map<String, dynamic>.from(raw as Map);
+    final evidence = x['decision_evidence'] is Map
+        ? Map<String, dynamic>.from(x['decision_evidence'] as Map)
+        : <String, dynamic>{};
+    final confidence = '${x['confidence'] ?? data['recommendation_confidence'] ?? '-'}';
+    final when = '${x['recommended_time'] ?? x['scheduled_at'] ?? '오늘'}';
+    final reason = '${x['reason'] ?? '판단근거가 제공되지 않았습니다.'}';
+    final source = '${evidence['weather_source'] ?? data['weather_source'] ?? 'unknown'}';
+    final stage = '${evidence['growth_stage'] ?? '미등록'}';
+    final risk = '${evidence['recent_max_risk'] ?? '-'}';
+    final obsCount = '${evidence['recent_observation_count'] ?? '-'}';
+    final temp = '${evidence['forecast_max_temp_c'] ?? '-'}';
+    final pop = '${evidence['forecast_max_rain_probability_pct'] ?? '-'}';
+    final wind = '${evidence['forecast_max_wind_ms'] ?? '-'}';
+    final score = '${evidence['best_work_score'] ?? '-'}';
+
+    return Card(
+      child: ExpansionTile(
+        leading: const Icon(Icons.auto_awesome),
+        title: Text('${x['title']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text('추천시간 $when · 신뢰도 $confidence'),
+        trailing: Text('P${x['priority'] ?? 2}'),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text('왜 이 작업을 추천했나요?', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 6),
+          Align(alignment: Alignment.centerLeft, child: Text(reason)),
+          const Divider(height: 22),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text('판단에 사용한 실제 데이터', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 4),
+          _evidenceRow(Icons.cloud_outlined, '기상 데이터', source == 'kma' ? '기상청 KMA' : source),
+          _evidenceRow(Icons.thermostat, '예보 최고기온', '$temp℃'),
+          _evidenceRow(Icons.water_drop_outlined, '최대 강수확률', '$pop%'),
+          _evidenceRow(Icons.air, '최대 풍속', '$wind m/s'),
+          _evidenceRow(Icons.schedule, '최적 작업시간 점수', '$score점'),
+          _evidenceRow(Icons.eco_outlined, '생육단계', stage),
+          _evidenceRow(Icons.visibility_outlined, '최근 관찰', '$obsCount건 · 최고 위험도 $risk/5'),
+          const Divider(height: 22),
+          _evidenceRow(Icons.verified_outlined, '추천 신뢰도', confidence),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text(
+                '이 추천은 작업 의사결정 지원용입니다. 농약 제품·농도·혼용·재살포 간격은 자동 처방하지 않습니다.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tasks = (data['tasks'] as List?) ?? [];
     final best = (data['best_work_times'] as List?) ?? [];
     final source = '${data['weather_source'] ?? 'unknown'}';
+    final confidence = '${data['recommendation_confidence'] ?? '-'}';
     return ListView(padding: const EdgeInsets.all(16), children: [
       Text('🍎 사과 재배 관리 비서', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
       const Text('기상 · 작업 · 병해충 · 잡초 · 경영 · 개인화 코치'),
@@ -89,9 +160,28 @@ class _DashboardPageState extends State<DashboardPage> {
         Expanded(child: Card(child: ListTile(title: const Text('위험점수'), trailing: Text('${data['risk_score'] ?? 0}')))),
         Expanded(child: Card(child: ListTile(title: const Text('순이익'), trailing: Text('${data['profit'] ?? 0}원')))),
       ]),
-      const Text('오늘 우선작업', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+      Row(children: [
+        const Expanded(child: Text('오늘 우선작업', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+        if (data['today_recommendations'] is List)
+          Chip(label: Text('추천 신뢰도 $confidence')),
+      ]),
       if (tasks.isEmpty) const Card(child: ListTile(title: Text('등록된 예정 작업이 없습니다.'))),
-      ...tasks.map((x) => Card(child: ListTile(title: Text('${x['title']}'), subtitle: Text('${x['scheduled_at'] ?? ''}'), trailing: Text('P${x['priority'] ?? 2}')))),
+      ...tasks.map((x) {
+        final m = x is Map ? Map<String, dynamic>.from(x) : <String, dynamic>{};
+        if (m['auto_recommended'] == true) return _recommendationCard(m);
+        return Card(child: ListTile(
+          leading: const Icon(Icons.task_outlined),
+          title: Text('${m['title'] ?? ''}'),
+          subtitle: Text('${m['scheduled_at'] ?? ''}'),
+          trailing: Text('P${m['priority'] ?? 2}'),
+        ));
+      }),
+      if (data['recommendation_policy'] != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Text('${data['recommendation_policy']}', style: Theme.of(context).textTheme.bodySmall),
+        ),
+      const SizedBox(height: 8),
       const Text('추천 작업시간', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
       ...best.take(3).map((x) => Card(child: ListTile(
             title: Text('${x['time']}'),
