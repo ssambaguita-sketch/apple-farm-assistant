@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'main.dart' as legacy;
 import 'annual_flow_page.dart';
 import 'recommendation_diagnosis_page.dart';
+import 'behavior_coach_page.dart';
 import 'services/farm_api.dart';
 
 Future<void> main() async {
@@ -37,7 +38,7 @@ class _AnnualHomeState extends State<AnnualHome> {
     RecommendationDiagnosisPage(),
     legacy.TaskPage(),
     legacy.WeedPage(),
-    legacy.CoachPage(),
+    BehaviorCoachPage(),
     legacy.MorePage(),
   ];
 
