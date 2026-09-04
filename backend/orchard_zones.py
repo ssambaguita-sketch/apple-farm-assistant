@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel
 from sqlalchemy import Table, Column, Integer, Float, String, select, insert, update, delete
 
-import app as main
+import main
 
 
 orchard_zones = Table(
