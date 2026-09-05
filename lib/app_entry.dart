@@ -11,12 +11,14 @@ import 'services/farm_api.dart';
 import 'services/integrated_api.dart';
 import 'services/orchard_api.dart';
 import 'services/orchard_selection.dart';
+import 'services/task_notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Future.wait([
     FarmApi.initialize(),
     OrchardSelection.initialize(),
+    TaskNotificationService.instance.initialize(),
   ]);
   runApp(const AnnualApp());
 }
