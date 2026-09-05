@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'services/farm_api.dart';
 import 'services/orchard_selection.dart';
+import 'services/task_notification_service.dart';
 
 class TaskManagementPage extends StatefulWidget {
   const TaskManagementPage({super.key});
@@ -12,6 +13,7 @@ class TaskManagementPage extends StatefulWidget {
 
 class TaskManagementPageState extends State<TaskManagementPage> {
   final api = FarmApi();
+  final notifications = TaskNotificationService.instance;
   List<dynamic> items = const [];
   bool loading = false;
   String message = '';
@@ -44,6 +46,7 @@ class TaskManagementPageState extends State<TaskManagementPage> {
       items = result;
       loading = false;
     });
+    await notifications.syncTasks(result, orchard: orchard);
   }
 
   Future<void> add() async {
@@ -63,7 +66,7 @@ class TaskManagementPageState extends State<TaskManagementPage> {
                 TextField(controller: title, decoration: const InputDecoration(labelText: '작업명')),
                 TextField(controller: scheduled, decoration: const InputDecoration(labelText: '예정시간/날짜')),
                 DropdownButtonFormField<String>(
-                  value: category,
+                  initialValue: category,
                   decoration: const InputDecoration(labelText: '분류'),
                   items: const ['일반', '전정', '적과', '관수', '방제', '예찰', '수확', '잡초', '엽면시비']
                       .map((e) => DropdownMenuItem(value: e, child: Text(e)))
@@ -71,7 +74,7 @@ class TaskManagementPageState extends State<TaskManagementPage> {
                   onChanged: (v) => setDialogState(() => category = v ?? '일반'),
                 ),
                 DropdownButtonFormField<int>(
-                  value: priority,
+                  initialValue: priority,
                   decoration: const InputDecoration(labelText: '우선순위'),
                   items: const [1, 2, 3, 4, 5]
                       .map((e) => DropdownMenuItem(value: e, child: Text('P$e')))
@@ -114,8 +117,11 @@ class TaskManagementPageState extends State<TaskManagementPage> {
   Future<void> complete(int id) async {
     final ok = await api.completeTask(id);
     if (!mounted) return;
-    setState(() => message = ok ? '✅ 완료 처리됨' : '⚠️ 완료 처리 실패');
-    if (ok) await reload();
+    setState(() => message = ok ? '✅ 완료 처리됨 · 후속 알림도 해제했습니다.' : '⚠️ 완료 처리 실패');
+    if (ok) {
+      await notifications.cancelTask(id);
+      await reload();
+    }
   }
 
   @override
@@ -142,7 +148,27 @@ class TaskManagementPageState extends State<TaskManagementPage> {
               '상단에서 선택한 $orchard 과수원의 작업만 표시합니다.',
               style: const TextStyle(color: Color(0xFF667067)),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
+            Card(
+              color: const Color(0xFFFFF6E8),
+              child: const Padding(
+                padding: EdgeInsets.all(14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.notifications_active_rounded, color: Color(0xFF9A6230)),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '자동추천 P3~P5 작업은 중요 알림으로 등록됩니다. 예정 시각 알림 후 미완료 상태면 30분, 2시간 뒤 다시 알려줍니다.',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
@@ -191,6 +217,8 @@ class TaskManagementPageState extends State<TaskManagementPage> {
               final m = x is Map ? Map<String, dynamic>.from(x) : <String, dynamic>{};
               final status = '${m['status'] ?? '예정'}';
               final auto = m['auto_recommended'] == true;
+              final priority = m['priority'] ?? 2;
+              final strongAlert = auto && (priority is num ? priority.toInt() >= 3 : int.tryParse('$priority') != null && int.parse('$priority') >= 3);
               return Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: Card(
@@ -203,8 +231,17 @@ class TaskManagementPageState extends State<TaskManagementPage> {
                         color: const Color(0xFF2E6B35),
                       ),
                     ),
-                    title: Text('${m['title'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: Text('${m['category'] ?? '일반'} · ${m['scheduled_at'] ?? ''} · P${m['priority'] ?? 2}'),
+                    title: Row(
+                      children: [
+                        Expanded(child: Text('${m['title'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w800))),
+                        if (strongAlert && status != '완료')
+                          const Padding(
+                            padding: EdgeInsets.only(left: 6),
+                            child: Icon(Icons.notifications_active_rounded, size: 18, color: Color(0xFFB56A22)),
+                          ),
+                      ],
+                    ),
+                    subtitle: Text('${m['category'] ?? '일반'} · ${m['scheduled_at'] ?? ''} · P$priority'),
                     trailing: status == '완료'
                         ? const Text('완료', style: TextStyle(fontWeight: FontWeight.w700))
                         : IconButton(
