@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'main.dart' as legacy;
+import 'dashboard_page.dart';
+import 'task_management_page.dart';
 import 'variety_annual_flow_page.dart';
 import 'recommendation_diagnosis_page.dart';
 import 'behavior_coach_page.dart';
@@ -75,6 +76,8 @@ class _AnnualHomeState extends State<AnnualHome> {
   int index = 0;
   final orchardApi = OrchardApi();
   final integratedApi = IntegratedApi();
+  final dashboardKey = GlobalKey<DashboardPageState>();
+  final taskKey = GlobalKey<TaskManagementPageState>();
   List<Map<String, dynamic>> orchards = [];
   Map<String, dynamic> integrated = {};
   bool syncing = false;
@@ -88,14 +91,14 @@ class _AnnualHomeState extends State<AnnualHome> {
   }
 
   void _rebuildPages() {
-    pages = const [
-      legacy.DashboardPage(),
-      VarietyAnnualFlowPage(),
-      RecommendationDiagnosisPage(),
-      legacy.TaskPage(),
-      WeedIntelligencePage(),
-      BehaviorCoachPage(),
-      ManagementPage(),
+    pages = [
+      DashboardPage(key: dashboardKey),
+      const VarietyAnnualFlowPage(),
+      const RecommendationDiagnosisPage(),
+      TaskManagementPage(key: taskKey),
+      const WeedIntelligencePage(),
+      const BehaviorCoachPage(),
+      const ManagementPage(),
     ];
   }
 
@@ -115,12 +118,20 @@ class _AnnualHomeState extends State<AnnualHome> {
     if (syncing) return;
     if (mounted) setState(() => syncing = true);
     try {
+      Map<String, dynamic>? data;
       if (syncTasks) {
-        await integratedApi.syncTasks();
+        final sync = await integratedApi.syncTasks();
+        if (sync['briefing'] is Map) {
+          data = Map<String, dynamic>.from(sync['briefing'] as Map);
+        }
       }
-      final data = await integratedApi.briefing(refresh: force);
+      data ??= await integratedApi.briefing(refresh: force);
       if (!mounted) return;
-      setState(() => integrated = data);
+      setState(() => integrated = data!);
+      await Future.wait([
+        taskKey.currentState?.reload() ?? Future<void>.value(),
+        dashboardKey.currentState?.reload() ?? Future<void>.value(),
+      ]);
     } finally {
       if (mounted) setState(() => syncing = false);
     }
@@ -243,8 +254,11 @@ class _AnnualHomeState extends State<AnnualHome> {
           padding: const EdgeInsets.fromLTRB(16, 7, 10, 7),
           child: Row(
             children: [
-              Icon(offline ? Icons.sync_problem_rounded : Icons.hub_rounded,
-                  size: 18, color: offline ? const Color(0xFF9A6230) : const Color(0xFF2F6B35)),
+              Icon(
+                offline ? Icons.sync_problem_rounded : Icons.hub_rounded,
+                size: 18,
+                color: offline ? const Color(0xFF9A6230) : const Color(0xFF2F6B35),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -289,6 +303,11 @@ class _AnnualHomeState extends State<AnnualHome> {
           bottomNavigationBar: NavigationBar(
             selectedIndex: index,
             onDestinationSelected: (v) {
+              if (v == 3) {
+                taskKey.currentState?.reload();
+              } else if (v == 0) {
+                dashboardKey.currentState?.reload();
+              }
               if (v != index) setState(() => index = v);
             },
             destinations: const [
