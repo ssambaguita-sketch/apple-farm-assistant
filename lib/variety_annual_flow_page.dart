@@ -64,7 +64,7 @@ class _VarietyAnnualFlowPageState extends State<VarietyAnnualFlowPage> {
                 child: Row(children: [
                   SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4)),
                   SizedBox(width: 12),
-                  Expanded(child: Text('과수원 데이터와 기상 보정값을 불러오는 중입니다...')),
+                  Expanded(child: Text('과수원 데이터와 연간 농작업을 불러오는 중입니다...')),
                 ]),
               ),
             )
@@ -79,10 +79,10 @@ class _VarietyAnnualFlowPageState extends State<VarietyAnnualFlowPage> {
           else ...[
             _adjustmentCard(reasons, shift, weather, gdd),
             const SizedBox(height: 12),
-            const Text('양력 12개월 농작업 일정', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+            const Text('양력 12개월 통합 농작업 일정', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
             const SizedBox(height: 4),
             const Text(
-              '각 월 안에 해당 24절기를 표시하고, 현재 월과 다음 달은 실제 생육단계·기상·수집된 적산온도로 작업창을 보정합니다.',
+              '일반 농작업 + 잡초 제거 + 엽면시비 타이밍을 같은 월 카드에서 함께 확인합니다. 현재 월과 다음 달은 생육단계·기상·GDD로 보정합니다.',
               style: TextStyle(fontSize: 12, height: 1.4, color: Color(0xFF667067)),
             ),
             const SizedBox(height: 12),
@@ -136,7 +136,7 @@ class _VarietyAnnualFlowPageState extends State<VarietyAnnualFlowPage> {
             const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('${OrchardSelection.name} · 양력 12개월 농작업', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+                Text('${OrchardSelection.name} · 통합 연간 농작업', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 3),
                 Text(
                   '${varieties.join(' · ')}${harvest.isEmpty ? '' : ' · ${harvest.join(' / ')}'}',
@@ -158,6 +158,14 @@ class _VarietyAnnualFlowPageState extends State<VarietyAnnualFlowPage> {
               _chip(shift == 0 ? '일정 보정 없음' : shift < 0 ? '${shift.abs()}일 앞당김' : '$shift일 늦춤'),
             ],
           ),
+          const SizedBox(height: 12),
+          const Row(children: [
+            _LegendDot(color: Color(0xFF4A8D50), label: '농작업'),
+            SizedBox(width: 12),
+            _LegendDot(color: Color(0xFF7A9B43), label: '잡초'),
+            SizedBox(width: 12),
+            _LegendDot(color: Color(0xFF4E7FB6), label: '엽면시비'),
+          ]),
         ],
       ),
     );
@@ -167,6 +175,7 @@ class _VarietyAnnualFlowPageState extends State<VarietyAnnualFlowPage> {
     final source = '${weather['weather_source'] ?? 'unknown'}';
     final meanTemp = weather['forecast_mean_temp_c'];
     final pop = weather['forecast_max_rain_probability_pct'];
+    final wind = weather['forecast_max_wind_ms'];
     final coverage = '${gdd['coverage'] ?? '없음'}';
 
     return Card(
@@ -184,21 +193,11 @@ class _VarietyAnnualFlowPageState extends State<VarietyAnnualFlowPage> {
           ]),
           const SizedBox(height: 10),
           Text(
-            '기상원 $source · 예보 평균기온 ${meanTemp ?? '-'}℃ · 최대 강수확률 ${pop ?? '-'}% · 적산온도 자료 $coverage',
+            '기상원 $source · 평균기온 ${meanTemp ?? '-'}℃ · 강수확률 ${pop ?? '-'}% · 풍속 ${wind ?? '-'}m/s · GDD 자료 $coverage',
             style: const TextStyle(fontSize: 12, color: Color(0xFF637064)),
           ),
           const SizedBox(height: 10),
-          ...reasons.map((r) => Padding(
-                padding: const EdgeInsets.only(bottom: 5),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6),
-                    child: Icon(Icons.circle, size: 7, color: Color(0xFF4A7C50)),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(r, style: const TextStyle(fontSize: 13))),
-                ]),
-              )),
+          ...reasons.map((r) => _bullet(r, const Color(0xFF4A7C50))),
         ]),
       ),
     );
@@ -208,6 +207,10 @@ class _VarietyAnnualFlowPageState extends State<VarietyAnnualFlowPage> {
     final m = (month['month'] as num).toInt();
     final terms = List<String>.from(month['solar_terms'] ?? const []);
     final tasks = List<String>.from(month['tasks'] ?? const []);
+    final weed = List<String>.from(month['weed_timing'] ?? const []);
+    final foliar = List<String>.from(month['foliar_timing'] ?? const []);
+    final weedStatus = '${month['weed_status'] ?? '월별 기준'}';
+    final foliarStatus = '${month['foliar_status'] ?? '월별 기준'}';
     final active = month['active_adjustment'] == true;
     final adjustment = (month['adjustment_days'] as num?)?.toInt() ?? 0;
     final isCurrent = m == currentMonth;
@@ -237,28 +240,58 @@ class _VarietyAnnualFlowPageState extends State<VarietyAnnualFlowPage> {
               ]),
             ),
             if (active)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(color: const Color(0xFFDCEFD8), borderRadius: BorderRadius.circular(999)),
-                child: Text(
-                  adjustment == 0 ? '기준일 유지' : adjustment < 0 ? '${adjustment.abs()}일 당김' : '$adjustment일 늦춤',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Color(0xFF2E6B35)),
-                ),
+              _statusChip(
+                adjustment == 0 ? '기준일 유지' : adjustment < 0 ? '${adjustment.abs()}일 당김' : '$adjustment일 늦춤',
+                const Color(0xFFDCEFD8),
+                const Color(0xFF2E6B35),
               ),
           ]),
-          const SizedBox(height: 12),
-          ...tasks.map((task) => Padding(
-                padding: const EdgeInsets.only(bottom: 7),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Icon(Icons.check_circle_rounded, size: 18, color: Color(0xFF4A8D50)),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text(task, style: const TextStyle(fontSize: 13, height: 1.35))),
-                ]),
-              )),
+          const SizedBox(height: 14),
+          _sectionTitle(Icons.check_circle_rounded, '주요 농작업', const Color(0xFF4A8D50)),
+          const SizedBox(height: 7),
+          ...tasks.map((task) => _bullet(task, const Color(0xFF4A8D50))),
+          const Divider(height: 22),
+          Row(children: [
+            Expanded(child: _sectionTitle(Icons.grass_rounded, '잡초 제거 타이밍', const Color(0xFF728F3E))),
+            _statusChip(weedStatus, const Color(0xFFF0F5E5), const Color(0xFF617A35)),
+          ]),
+          const SizedBox(height: 7),
+          ...weed.map((item) => _bullet(item, const Color(0xFF7A9B43))),
+          const Divider(height: 22),
+          Row(children: [
+            Expanded(child: _sectionTitle(Icons.water_drop_outlined, '엽면시비 타이밍', const Color(0xFF4E7FB6))),
+            _statusChip(foliarStatus, const Color(0xFFEAF2FA), const Color(0xFF426C98)),
+          ]),
+          const SizedBox(height: 7),
+          ...foliar.map((item) => _bullet(item, const Color(0xFF4E7FB6))),
         ]),
       ),
     );
   }
+
+  Widget _sectionTitle(IconData icon, String text, Color color) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 7),
+          Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: color)),
+        ],
+      );
+
+  Widget _bullet(String text, Color color) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Padding(padding: const EdgeInsets.only(top: 6), child: Icon(Icons.circle, size: 7, color: color)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text, style: const TextStyle(fontSize: 13, height: 1.35))),
+        ]),
+      );
+
+  Widget _statusChip(String text, Color background, Color foreground) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(999)),
+        child: Text(text, style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: foreground)),
+      );
 
   Widget _chip(String text) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
@@ -270,4 +303,21 @@ class _VarietyAnnualFlowPageState extends State<VarietyAnnualFlowPage> {
     if (value is num) return value.toStringAsFixed(0);
     return '$value';
   }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 9, height: 9, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 5),
+          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+        ],
+      );
 }
