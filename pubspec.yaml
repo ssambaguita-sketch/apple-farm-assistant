@@ -1,7 +1,7 @@
 name: apple_farm_assistant
 description: Final Apple Farm Assistant
 publish_to: 'none'
-version: 3.7.3+45
+version: 3.7.4+46
 environment:
   sdk: '>=3.3.0 <4.0.0'
 dependencies:
@@ -12,5 +12,6 @@ dependencies:
   image_picker: ^1.1.2
   image: ^4.3.0
   shared_preferences: ^2.5.3
+  url_launcher: ^6.3.1
 flutter:
   uses-material-design: true
