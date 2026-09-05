@@ -36,3 +36,8 @@ jobs:
         env:
           PYTHONPATH: backend
         run: python backend/test_phenology_smoke.py
+
+      - name: Run GPS persistence smoke test
+        env:
+          PYTHONPATH: backend
+        run: python backend/test_gps_smoke.py
