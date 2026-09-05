@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
-import app as main
+import main
 
 
 class OrchardUpdateIn(BaseModel):
@@ -17,18 +17,12 @@ class OrchardUpdateIn(BaseModel):
 
 
 def _run_secondary_update(statement):
-    """Run a non-critical related-table update in its own transaction.
-
-    PostgreSQL marks a transaction as failed after a SQL error. Keeping each
-    optional cascade in a separate transaction prevents a missing/legacy
-    secondary table from poisoning the orchard update transaction itself.
-    """
+    """Run a non-critical related-table update in its own transaction."""
     try:
         with main.engine.begin() as c:
             c.execute(statement)
-    except Exception:
-        # Secondary history data must never block editing the orchard itself.
-        pass
+    except Exception as exc:
+        print(f"[orchard cascade warning] {type(exc).__name__}: {exc}")
 
 
 def _cascade_orchard_name(old_name: str, new_name: str):
@@ -51,8 +45,8 @@ def _cascade_orchard_name(old_name: str, new_name: str):
             .where(orchard_zones.orchard_zones.c.orchard == old_name)
             .values(orchard=new_name)
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[orchard zones cascade warning] {type(exc).__name__}: {exc}")
 
     try:
         import weed_intelligence
@@ -61,8 +55,8 @@ def _cascade_orchard_name(old_name: str, new_name: str):
             .where(weed_intelligence.weed_history.c.orchard == old_name)
             .values(orchard=new_name)
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f"[weed cascade warning] {type(exc).__name__}: {exc}")
 
 
 @main.app.put("/api/orchards/{orchard_id}")
@@ -76,8 +70,6 @@ def update_orchard(orchard_id: int, x: OrchardUpdateIn):
     old_name = ""
 
     try:
-        # Commit the primary orchard edit first. Optional cascade failures must
-        # not roll this transaction back.
         with main.engine.begin() as c:
             row = c.execute(
                 select(main.orchards).where(main.orchards.c.id == orchard_id)
@@ -111,6 +103,7 @@ def update_orchard(orchard_id: int, x: OrchardUpdateIn):
     except IntegrityError:
         raise HTTPException(409, "이미 존재하는 과수원 이름입니다")
     except Exception as exc:
+        print(f"[orchard update error] {type(exc).__name__}: {exc}")
         raise HTTPException(500, f"과수원 수정 중 서버 오류: {type(exc).__name__}")
 
     _cascade_orchard_name(old_name, name)
@@ -165,4 +158,7 @@ def create_multi_orchard(x: OrchardCreateMultiIn):
             orchard_id = result.inserted_primary_key[0]
     except IntegrityError:
         raise HTTPException(409, "이미 존재하는 과수원 이름입니다")
+    except Exception as exc:
+        print(f"[orchard create error] {type(exc).__name__}: {exc}")
+        raise HTTPException(500, f"과수원 생성 중 서버 오류: {type(exc).__name__}")
     return {"ok": True, "id": orchard_id, "name": name, "varieties": varieties or ["후지"]}
