@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'finance_page.dart';
 import 'gps_settings_page.dart';
@@ -7,6 +8,10 @@ import 'services/orchard_selection.dart';
 
 class ManagementPage extends StatelessWidget {
   const ManagementPage({super.key});
+
+  static final Uri _releaseUri = Uri.parse(
+    'https://github.com/ssambaguita-sketch/apple-farm-assistant/releases/latest',
+  );
 
   void _open(BuildContext context, String title, Widget page) {
     Navigator.of(context).push(
@@ -19,6 +24,15 @@ class ManagementPage extends StatelessWidget {
     );
   }
 
+  Future<void> _openOfficialRelease(BuildContext context) async {
+    final opened = await launchUrl(_releaseUri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('공식 다운로드 페이지를 열 수 없습니다. 네트워크를 확인하세요.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -28,6 +42,17 @@ class ManagementPage extends StatelessWidget {
         const SizedBox(height: 4),
         Text('${OrchardSelection.name} 기준 통합 관리'),
         const SizedBox(height: 14),
+        Card(
+          color: const Color(0xFFF1F8EF),
+          child: ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.system_update_alt_rounded)),
+            title: const Text('앱 업데이트 · 공식 설치 출처', style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: const Text('GitHub Releases에서 최신 APK를 받습니다. 첫 설치 때만 브라우저의 “이 출처 허용” 설정이 필요할 수 있습니다.'),
+            trailing: const Icon(Icons.open_in_new_rounded),
+            onTap: () => _openOfficialRelease(context),
+          ),
+        ),
+        const SizedBox(height: 10),
         Card(
           child: ListTile(
             leading: const CircleAvatar(child: Icon(Icons.account_balance_wallet_outlined)),
