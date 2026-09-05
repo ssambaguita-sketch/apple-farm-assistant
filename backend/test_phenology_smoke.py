@@ -47,11 +47,26 @@ def run():
     assert current['active_adjustment'] is True
     assert '320주' in ' '.join(current['tasks'])
     assert '홍로' in ' '.join(current['tasks'])
+    assert isinstance(current['weed_timing'], list) and current['weed_timing']
+    assert isinstance(current['foliar_timing'], list) and current['foliar_timing']
+    assert current['weed_status']
+    assert current['foliar_status']
+
+    april = data['months'][3]
+    july = data['months'][6]
+    september = data['months'][8]
+    assert '잡초' in ' '.join(april['weed_timing'])
+    assert '엽면' in ' '.join(april['foliar_timing'])
+    assert '여름잡초' in ' '.join(july['weed_timing'])
+    assert '수확' in ' '.join(september['foliar_timing'])
+    assert 'PSIS' in data['policy']
 
     print('PHENOLOGY_SMOKE_OK')
     print({
         'current_month': data['current_month'],
         'adjustment_days': data['current_adjustment_days'],
+        'weed_status': current['weed_status'],
+        'foliar_status': current['foliar_status'],
         'gdd': data['gdd'],
         'weather_source': data['weather']['weather_source'],
     })
