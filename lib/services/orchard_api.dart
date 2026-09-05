@@ -84,6 +84,29 @@ class OrchardApi {
     }
   }
 
+  Future<Map<String, dynamic>> remove({
+    required int id,
+    required String confirmName,
+  }) async {
+    try {
+      final r = await http
+          .post(
+            Uri.parse('${FarmApi.baseUrl}/api/orchards/$id/remove'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'confirm_name': confirmName}),
+          )
+          .timeout(const Duration(seconds: 25));
+      if (r.statusCode >= 200 && r.statusCode < 300) {
+        return Map<String, dynamic>.from(jsonDecode(r.body));
+      }
+      return {'error': _message(r, '과수원 삭제 실패')};
+    } on TimeoutException {
+      return {'error': '과수원 삭제 요청 시간이 초과되었습니다. 잠시 후 다시 시도하세요.'};
+    } catch (e) {
+      return {'error': '과수원 삭제 서버 연결 실패 (${e.runtimeType})'};
+    }
+  }
+
   String _message(http.Response response, String fallback) {
     try {
       final j = jsonDecode(response.body);
