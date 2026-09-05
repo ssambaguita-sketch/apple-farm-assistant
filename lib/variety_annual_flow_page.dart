@@ -1,192 +1,247 @@
 import 'package:flutter/material.dart';
 
-import 'annual_flow_page.dart';
+import 'services/orchard_api.dart';
 import 'services/orchard_selection.dart';
 
-class VarietyAnnualFlowPage extends StatelessWidget {
+class VarietyAnnualFlowPage extends StatefulWidget {
   const VarietyAnnualFlowPage({super.key});
 
+  @override
+  State<VarietyAnnualFlowPage> createState() => _VarietyAnnualFlowPageState();
+}
+
+class _VarietyAnnualFlowPageState extends State<VarietyAnnualFlowPage> {
+  final OrchardApi _api = OrchardApi();
+  Map<String, dynamic>? _orchard;
+  bool _loading = true;
+
   static const _profiles = <String, Map<String, dynamic>>{
-    '루비에스': {'group': '조생', 'harvest': '8월 중심', 'focus': {7: '성숙 전 과실 병반·일소·수분 스트레스 확인', 8: '수확 전 과실 병해·낙과·해충 피해 집중 확인', 9: '수확 결과·피해과 비율 기록 및 수세 회복 점검'}},
-    '홍로': {'group': '조중생', 'harvest': '8~9월 중심', 'focus': {7: '착색 전 과실 병반·응애·나방류 피해 확인', 8: '착색·성숙과 함께 탄저병 등 과실 병반·낙과 집중 예찰', 9: '수확 전후 피해과·낙과·병반 기록'}},
-    '아리수': {'group': '중생', 'harvest': '9월 중심', 'focus': {8: '9월 수확 준비를 고려해 과실 병반·착색·노린재류 피해 확인', 9: '성숙·수확 전 병해·낙과·강풍 위험 집중 확인', 10: '수확 결과와 잎·수세 상태 기록'}},
-    '감홍': {'group': '중만생', 'harvest': '9~10월 중심', 'focus': {8: '후반 과실비대·Mg/K 불균형·과실 병반 함께 확인', 9: '성숙·착색과 탄저병·갈색무늬병·낙과 위험 집중 확인', 10: '수확기 과실 건전성·저온·강우 스트레스 점검'}},
-    '시나노골드': {'group': '만생', 'harvest': '10월 중심', 'focus': {9: '늦은 성숙기를 고려해 잎·과실 병해와 강풍 위험 지속 확인', 10: '수확 전 과실 건전성·병반·저온 스트레스 집중 확인', 11: '수확 후 수세·병든 잎·월동 감염원 정리'}},
-    '후지': {'group': '만생', 'harvest': '10~11월 중심', 'focus': {9: '착색·성숙 초기 병해·낙과·Mg/K 불균형 지속 확인', 10: '수확 전 과실 병해·강우·저온·낙과 위험 집중 확인', 11: '늦은 수확과 수확 후 수세·병든 잎·월동 감염원 정리'}},
+    '루비에스': {'group': '조생', 'harvest': '8월'},
+    '홍로': {'group': '조중생', 'harvest': '8~9월'},
+    '아리수': {'group': '중생', 'harvest': '9월'},
+    '감홍': {'group': '중만생', 'harvest': '9~10월'},
+    '시나노골드': {'group': '만생', 'harvest': '10월'},
+    '후지': {'group': '만생', 'harvest': '10~11월'},
   };
 
-  static const _weedPlan = <int, List<String>>{
-    1: ['월동잡초·전년도 재발생 구역 기록 정리', '제초제 살포보다 문제구역 지도 작성'],
-    2: ['월동잡초 분포 예찰', '봄 1차 제초 후보구역 표시'],
-    3: ['새 잡초 발생초기 촬영 시작', '피복도 증가 구역은 봄 1차 제초 준비'],
-    4: ['봄 1차 핵심 제초 후보', '카메라 피복도·분포·강우예보를 함께 판정'],
-    5: ['1차 처리 후 재발생·생존 잡초 재촬영', '효과 불량 구역은 원인분석 우선'],
-    6: ['초여름 재발생 관리', '장마 전후 건조시간과 잡초 크기를 함께 확인'],
-    7: ['여름잡초 집중 예찰', '고온·가뭄 스트레스와 재발생 속도 확인'],
-    8: ['여름 2차 제초 후보', '피복도 급증 구역 우선 재평가'],
-    9: ['수확 전 선택적 관리', '수확 동선과 품종 숙기를 고려해 필요한 구역만 관리'],
-    10: ['수확기 최소 개입', '수확 방해 구역 중심 관리'],
-    11: ['생존·재발생 잡초 지도 작성', '다음 해 저항성/방제실패 의심 구역 표시'],
-    12: ['연간 제초 이력 결산', '살포 횟수·피복도 변화·생존 잡초 기록 분석'],
-  };
+  static const _terms = <Map<String, dynamic>>[
+    {'name': '소한', 'm': 1, 'd': 5, 'stage': '휴면', 'tasks': ['전년도 경영·수확·병해충 기록 결산', '동해·수피 갈라짐·월동해충 흔적 점검', '전정 계획과 작업구역 우선순위 설정']},
+    {'name': '대한', 'm': 1, 'd': 20, 'stage': '휴면', 'tasks': ['전정 도구·시설·지주 점검', '병든 가지·월동 감염원 표시', '토양검정·엽분석 결과로 시비 계획 검토']},
+    {'name': '입춘', 'm': 2, 'd': 4, 'stage': '휴면 후반', 'tasks': ['동계전정 시작·진행', '수형·가지 밀도 조정', '월동 해충·병반을 전정 중 함께 기록']},
+    {'name': '우수', 'm': 2, 'd': 19, 'stage': '휴면 후반', 'tasks': ['동계전정 지속', '배수로·토양 과습 취약구역 점검', '전년도 결핍 반복 나무 표시']},
+    {'name': '경칩', 'm': 3, 'd': 5, 'stage': '발아 준비', 'tasks': ['전정 마무리', '유인·지주·관수시설 점검', '발아 전 월동해충·병든 조직 집중 예찰']},
+    {'name': '춘분', 'm': 3, 'd': 20, 'stage': '발아 준비', 'tasks': ['눈 발달 상태 비교', '늦서리·저온 예보 확인', '봄 잡초 발생초기 구역 촬영 시작']},
+    {'name': '청명', 'm': 4, 'd': 5, 'stage': '발아·개화 전', 'tasks': ['꽃눈·새잎 상태 확인', '강우 뒤 초기 병반 예찰', 'Fe·Zn·B 계열 결핍 의심 신초 비교 관찰']},
+    {'name': '곡우', 'm': 4, 'd': 20, 'stage': '개화', 'tasks': ['개화·수분 상태 관찰', '서리·강풍 피해 확인', '수분곤충 활동을 고려해 방제 의사결정 주의']},
+    {'name': '입하', 'm': 5, 'd': 5, 'stage': '착과', 'tasks': ['착과량 확인', '적과 시작', '진딧물·응애·나방류와 잎 병반 예찰']},
+    {'name': '소만', 'm': 5, 'd': 21, 'stage': '착과', 'tasks': ['적과 강도 조정', '신초 생육·수세 편차 기록', '잡초 1차 처리 후 재발생 구역 확인']},
+    {'name': '망종', 'm': 6, 'd': 6, 'stage': '초기 과실비대', 'tasks': ['적과 마무리', '유인·가지 배치 점검', '장마 전 배수·토양수분·잡초 상태 확인']},
+    {'name': '하지', 'm': 6, 'd': 21, 'stage': '과실비대', 'tasks': ['과실비대 편차 기록', 'Mg·K 불균형 의심 잎 예찰', '응애·과실가해 해충·병반 증가속도 확인']},
+    {'name': '소서', 'm': 7, 'd': 7, 'stage': '과실비대', 'tasks': ['고온·가뭄·일소 위험 점검', '관수 필요성 판단', '여름잡초 피복도와 재발생 속도 확인']},
+    {'name': '대서', 'm': 7, 'd': 23, 'stage': '과실비대', 'tasks': ['과실·잎 일소와 수분 스트레스 점검', '탄저병·갈색무늬병 등 여름 병해 집중 예찰', '가지 처짐·지주 보강']},
+    {'name': '입추', 'm': 8, 'd': 7, 'stage': '착색 준비', 'tasks': ['착색 준비와 과실 건전성 점검', '태풍·강풍 대비 지주·유인끈 확인', '여름 2차 잡초 관리 필요구역 재평가']},
+    {'name': '처서', 'm': 8, 'd': 23, 'stage': '착색·성숙', 'tasks': ['조생·중생 품종 성숙도 확인', '탄저병·노린재류·낙과 집중 예찰', '수확 동선과 인력 계획 수립']},
+    {'name': '백로', 'm': 9, 'd': 8, 'stage': '착색·성숙', 'tasks': ['홍로·아리수 등 수확 적기 판단', '태풍·강풍·낙과 위험 점검', '수확 전 피해과·병반 비율 기록']},
+    {'name': '추분', 'm': 9, 'd': 23, 'stage': '성숙·수확', 'tasks': ['중생·중만생 품종 수확·선별', '만생 품종 착색·성숙도 지속 관찰', '수확량·판매·비용 기록 시작']},
+    {'name': '한로', 'm': 10, 'd': 8, 'stage': '본격 수확', 'tasks': ['감홍·시나노골드 등 수확 적기 확인', '후지 성숙·착색·병반 점검', '강우·저온 전후 수확 우선순위 조정']},
+    {'name': '상강', 'm': 10, 'd': 23, 'stage': '수확', 'tasks': ['만생 품종 본격 수확·선별·출하', '피해과·낙과·수확량 기록', '수확 구역별 품질 차이 기록']},
+    {'name': '입동', 'm': 11, 'd': 7, 'stage': '수확 후', 'tasks': ['후지 수확 마무리', '병든 잎·과실·잔재 정리', '수세·수확량·품질을 구역별로 정리']},
+    {'name': '소설', 'm': 11, 'd': 22, 'stage': '휴면 진입', 'tasks': ['월동 해충·감염원 다발생 구역 표시', '토양·엽 분석 필요구역 선정', '배수·토양구조 문제구역 정리']},
+    {'name': '대설', 'm': 12, 'd': 7, 'stage': '휴면', 'tasks': ['동해·적설 대비 시설 점검', '연간 작업·제초·병해충 기록 분석', '다음 해 개선 작업 후보 작성']},
+    {'name': '동지', 'm': 12, 'd': 22, 'stage': '휴면', 'tasks': ['연간 매출·비용·순이익 결산', '품종별 수확성과 비교', '다음 해 전정·시비·예찰·잡초관리 계획 확정']},
+  ];
 
-  List<String> _varieties() {
-    final raw = OrchardSelection.varieties.trim();
-    final out = raw.split(',').map((x) => x.trim()).where((x) => x.isNotEmpty).toList();
-    return out.isEmpty ? const ['후지'] : out;
-  }
-
-  Widget _hero(BuildContext context) {
-    final month = DateTime.now().month;
-    final varieties = _varieties();
-    final first = varieties.first;
-    final p = _profiles[first];
-    final group = p?['group'] ?? '기본';
-    final harvest = p?['harvest'] ?? '생육단계 기준';
-    final focusMap = p == null ? <int, String>{} : Map<int, String>.from(p['focus'] as Map);
-    final focus = focusMap[month] ?? '실제 생육단계와 기상·관찰기록을 우선해 관리합니다.';
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFEAF5E5), Color(0xFFF8FAF6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0x10000000)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(Icons.spa_outlined, color: Color(0xFF2F6B35)),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${OrchardSelection.name} · 품종별 연간 플로우',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${varieties.join(' · ')} · $group · $harvest',
-                      style: const TextStyle(fontSize: 12, color: Color(0xFF637064)),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _miniInfo(Icons.calendar_today_outlined, '$month월 집중', focus)),
-              const SizedBox(width: 8),
-              Expanded(child: _miniInfo(Icons.flag_outlined, '관리 기준', '실제 생육단계 우선')),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _miniInfo(IconData icon, String title, String value) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 74),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.92),
-        borderRadius: BorderRadius.circular(17),
-        border: Border.all(color: const Color(0x0E000000)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 16, color: const Color(0xFF35733C)),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 7),
-          Text(
-            value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, height: 1.3, color: Color(0xFF4D574F)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _weedStrip() {
-    final month = DateTime.now().month;
-    final items = _weedPlan[month] ?? const <String>[];
-    final primary = items.isNotEmpty ? items.first : '이번 달 잡초 관리 계획 확인';
-    final secondary = items.length > 1 ? items[1] : '잡초 탭에서 카메라·구역이력·기상으로 재평가';
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0x10000000)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const CircleAvatar(
-            radius: 18,
-            backgroundColor: Color(0xFFE1F0DC),
-            child: Icon(Icons.grass_rounded, color: Color(0xFF2F6B35), size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('이번 달 잡초·제초', style: TextStyle(fontWeight: FontWeight.w900)),
-                const SizedBox(height: 4),
-                Text(primary, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 2),
-                Text(secondary, style: const TextStyle(fontSize: 12, color: Color(0xFF667067))),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    OrchardSelection.notifier.addListener(_selectionChanged);
+    _load();
   }
 
   @override
-  Widget build(BuildContext context) => Column(
+  void dispose() {
+    OrchardSelection.notifier.removeListener(_selectionChanged);
+    super.dispose();
+  }
+
+  void _selectionChanged() => _load();
+
+  Future<void> _load() async {
+    if (mounted) setState(() => _loading = true);
+    final items = await _api.list();
+    final selected = OrchardSelection.name;
+    Map<String, dynamic>? found;
+    for (final item in items) {
+      if ('${item['name']}' == selected) {
+        found = item;
+        break;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _orchard = found;
+      _loading = false;
+    });
+  }
+
+  List<String> _varieties() {
+    final raw = '${_orchard?['variety'] ?? OrchardSelection.varieties}'.trim();
+    final values = raw.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    return values.isEmpty ? const ['후지'] : values;
+  }
+
+  int _termIndex(DateTime now) {
+    final dates = _terms.map((t) => DateTime(now.year, t['m'] as int, t['d'] as int)).toList();
+    var index = 0;
+    for (var i = 0; i < dates.length; i++) {
+      if (!now.isBefore(dates[i])) index = i;
+    }
+    return index;
+  }
+
+  String _harvestHint(List<String> varieties) {
+    final hints = <String>[];
+    for (final v in varieties) {
+      final h = _profiles[v]?['harvest'];
+      if (h != null) hints.add('$v $h');
+    }
+    return hints.isEmpty ? '등록 생육단계 기준' : hints.join(' · ');
+  }
+
+  List<String> _personalizedTasks(Map<String, dynamic> term) {
+    final tasks = List<String>.from(term['tasks'] as List);
+    final varieties = _varieties();
+    final stage = '${_orchard?['growth_stage'] ?? ''}'.trim();
+    final trees = (_orchard?['tree_count'] as num?)?.toInt() ?? 0;
+    final area = (_orchard?['area_m2'] as num?)?.toDouble() ?? 0;
+    final name = OrchardSelection.name;
+
+    if (stage.isNotEmpty) {
+      tasks.insert(0, '$name의 실제 등록 생육단계 「$stage」를 절기 예상단계보다 우선해 작업 시기를 조정');
+    }
+    if (trees > 0 || area > 0) {
+      final scale = [if (trees > 0) '$trees주', if (area > 0) '${area.toStringAsFixed(0)}㎡'].join(' · ');
+      tasks.add('작업 규모 $scale 기준으로 구역을 나눠 완료율 기록');
+    }
+    if (varieties.length > 1) {
+      tasks.add('품종별 숙기가 다르므로 ${varieties.join('·')}를 같은 날짜에 일괄 처리하지 말고 품종별 상태를 따로 확인');
+    }
+    return tasks;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final currentIndex = _termIndex(now);
+    final current = _terms[currentIndex];
+    final next = _terms[(currentIndex + 1) % _terms.length];
+    final varieties = _varieties();
+    final stage = '${_orchard?['growth_stage'] ?? '미등록'}';
+    final trees = _orchard?['tree_count'] ?? 0;
+    final area = _orchard?['area_m2'] ?? 0;
+    final hasLocation = _orchard?['lat'] != null && _orchard?['lon'] != null;
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 28),
         children: [
-          _hero(context),
-          _weedStrip(),
-          const Expanded(child: AnnualFlowPage()),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFFEAF5E5), Color(0xFFF8FAF6)]),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: const Color(0x10000000)),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const CircleAvatar(backgroundColor: Colors.white, child: Icon(Icons.eco_outlined, color: Color(0xFF2F6B35))),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${OrchardSelection.name} · 24절기 연간 농작업', style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 3),
+                  Text('${varieties.join(' · ')} · ${_harvestHint(varieties)}', style: const TextStyle(fontSize: 12, color: Color(0xFF637064))),
+                ])),
+                if (_loading) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+              ]),
+              const SizedBox(height: 14),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                _chip('현재 절기', '${current['name']}'),
+                _chip('다음 절기', '${next['name']}'),
+                _chip('생육단계', stage),
+                _chip('규모', '${area}㎡ · ${trees}주'),
+                _chip('위치', hasLocation ? 'GPS 적용' : 'GPS 미등록'),
+              ]),
+              const SizedBox(height: 12),
+              const Text('※ 24절기는 태양 황경 기준입니다. 절기 날짜는 해마다 약 ±1일 차이가 날 수 있으며, 실제 발아·개화·착과·성숙 상태와 현장 기상을 우선합니다.', style: TextStyle(fontSize: 11, height: 1.35, color: Color(0xFF667067))),
+            ]),
+          ),
+          const SizedBox(height: 14),
+          _currentCard(current),
+          const SizedBox(height: 18),
+          const Text('24절기 연간 작업표', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 4),
+          const Text('선택한 과수원 데이터가 각 절기 작업에 반영됩니다.', style: TextStyle(color: Color(0xFF667067))),
+          const SizedBox(height: 10),
+          ...List.generate(_terms.length, (i) => _termCard(_terms[i], i == currentIndex, now.year)),
         ],
+      ),
+    );
+  }
+
+  Widget _chip(String label, String value) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: const Color(0x10000000))),
+        child: Text('$label · $value', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+      );
+
+  Widget _currentCard(Map<String, dynamic> term) {
+    final tasks = _personalizedTasks(term);
+    return Card(
+      color: const Color(0xFFF1F8EE),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.today_rounded, color: Color(0xFF2F6B35)),
+            const SizedBox(width: 8),
+            Expanded(child: Text('지금은 ${term['name']} · 예상 ${term['stage']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900))),
+          ]),
+          const SizedBox(height: 12),
+          ...tasks.take(5).map((t) => _taskRow(t)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _termCard(Map<String, dynamic> term, bool active, int year) {
+    final tasks = _personalizedTasks(term);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Card(
+        color: active ? const Color(0xFFF3F9F0) : Colors.white,
+        child: ExpansionTile(
+          initiallyExpanded: active,
+          leading: CircleAvatar(
+            backgroundColor: active ? const Color(0xFF3E7D45) : const Color(0xFFE6F0E3),
+            foregroundColor: active ? Colors.white : const Color(0xFF2F6B35),
+            child: Text('${term['m']}/${term['d']}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800)),
+          ),
+          title: Text('${term['name']} · ${term['stage']}', style: const TextStyle(fontWeight: FontWeight.w900)),
+          subtitle: Text('$year년 기준 약 ${term['m']}월 ${term['d']}일 · 실제 날짜 ±1일 가능'),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: tasks.map(_taskRow).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _taskRow(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Padding(padding: EdgeInsets.only(top: 4), child: Icon(Icons.check_circle_outline_rounded, size: 18, color: Color(0xFF3E7D45))),
+          const SizedBox(width: 9),
+          Expanded(child: Text(text, style: const TextStyle(height: 1.35))),
+        ]),
       );
 }
