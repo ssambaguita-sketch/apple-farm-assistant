@@ -34,6 +34,33 @@ jobs:
           rm -rf test
           rm -f analysis_options.yaml
 
+      - name: Apply selected fourth app icon
+        shell: bash
+        run: |
+          set -euo pipefail
+          ICON="assets/app_icon_fourth.svg"
+          test -f "$ICON"
+          if ! command -v convert >/dev/null 2>&1 && ! command -v magick >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq imagemagick
+          fi
+          render_icon() {
+            local size="$1"
+            local out="$2"
+            mkdir -p "$(dirname "$out")"
+            if command -v magick >/dev/null 2>&1; then
+              magick -background none "$ICON" -resize "${size}x${size}" "$out"
+            else
+              convert -background none "$ICON" -resize "${size}x${size}" "$out"
+            fi
+          }
+          render_icon 48  android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          render_icon 72  android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          render_icon 96  android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          render_icon 144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          render_icon 192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          echo "Selected fourth launcher icon applied to all Android densities."
+
       - name: Fix Flutter source
         run: |
           python3 - <<'PY'
@@ -48,7 +75,6 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-
           p = Path("android/app/src/main/AndroidManifest.xml")
           s = p.read_text()
           manifest_tag = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
@@ -69,14 +95,9 @@ jobs:
                   s = s.replace(manifest_tag, manifest_tag + '\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>')
           if 'usesCleartextTraffic' not in s:
               s = s.replace('<application', '<application android:usesCleartextTraffic="true"', 1)
-
           receivers = '''
-              <receiver
-                  android:exported="false"
-                  android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
-              <receiver
-                  android:exported="false"
-                  android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+              <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+              <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
                   <intent-filter>
                       <action android:name="android.intent.action.BOOT_COMPLETED" />
                       <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
@@ -93,11 +114,7 @@ jobs:
           if kts.exists():
               g = kts.read_text()
               if 'isCoreLibraryDesugaringEnabled' not in g:
-                  g = g.replace(
-                      'compileOptions {',
-                      'compileOptions {\n        isCoreLibraryDesugaringEnabled = true',
-                      1,
-                  )
+                  g = g.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
               if 'coreLibraryDesugaring(' not in g:
                   g += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
               kts.write_text(g)
@@ -120,18 +137,14 @@ jobs:
           keyAlias=$ANDROID_KEY_ALIAS
           storeFile=release-keystore.jks
           EOF
-
             python3 - <<'PY'
           from pathlib import Path
-
           kts = Path('android/app/build.gradle.kts')
           groovy = Path('android/app/build.gradle')
-
           if kts.exists():
               s = kts.read_text()
               if 'val keystoreProperties' not in s:
-                  prefix = '''import java.util.Properties\nimport java.io.FileInputStream\n\nval keystoreProperties = Properties()\nval keystorePropertiesFile = rootProject.file("key.properties")\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n}\n\n'''
-                  s = prefix + s
+                  s = '''import java.util.Properties\nimport java.io.FileInputStream\n\nval keystoreProperties = Properties()\nval keystorePropertiesFile = rootProject.file("key.properties")\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n}\n\n''' + s
               marker = '    buildTypes {\n'
               signing = '''    signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }\n    }\n\n'''
               if 'create("release")' not in s:
@@ -141,8 +154,7 @@ jobs:
           elif groovy.exists():
               s = groovy.read_text()
               if 'def keystoreProperties' not in s:
-                  prefix = '''def keystoreProperties = new Properties()\ndef keystorePropertiesFile = rootProject.file('key.properties')\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n}\n\n'''
-                  s = prefix + s
+                  s = '''def keystoreProperties = new Properties()\ndef keystorePropertiesFile = rootProject.file('key.properties')\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n}\n\n''' + s
               marker = '    buildTypes {\n'
               signing = '''    signingConfigs {\n        release {\n            keyAlias keystoreProperties['keyAlias']\n            keyPassword keystoreProperties['keyPassword']\n            storeFile file(keystoreProperties['storeFile'])\n            storePassword keystoreProperties['storePassword']\n        }\n    }\n\n'''
               if 'signingConfigs {' not in s:
@@ -154,10 +166,8 @@ jobs:
           PY
             keytool -list -keystore android/app/release-keystore.jks -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
             echo "ANDROID_SIGNING_MODE=stable" >> "$GITHUB_ENV"
-            echo "Stable release signing enabled."
           else
             echo "ANDROID_SIGNING_MODE=fallback" >> "$GITHUB_ENV"
-            echo "Stable signing secrets are not configured; using Flutter template fallback signing."
           fi
 
       - name: Get dependencies
@@ -181,11 +191,7 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
           if [[ -n "$APKSIGNER" ]]; then
             "$APKSIGNER" verify --verbose --print-certs "$APK"
-          else
-            echo "apksigner not found; checksum verification only."
           fi
-          echo "APK SHA-256: $SHA256"
-          echo "Signing mode: ${ANDROID_SIGNING_MODE:-fallback}"
 
       - name: Prepare official APK name
         id: release_meta
@@ -222,19 +228,15 @@ jobs:
           - 버전: ${VERSION}
           - APK SHA-256: ${APK_SHA256}
           - Android 서명 모드: ${ANDROID_SIGNING_MODE:-fallback}
-          - 공식 설치 출처: 이 GitHub Releases 페이지
+          - 앱 아이콘: 선택한 4번째 사과+달력 디자인
           - 추천작업 강화 알림: Android 고중요도 채널 · 반복 알림 · 재부팅 후 예약 복구 지원
 
           앱의 경영·설정 > 앱 업데이트·공식 설치 출처 메뉴에서도 이 페이지를 열 수 있습니다.
-          Android에서 첫 설치 시 사용 중인 브라우저 또는 파일 앱에 대해 '이 출처의 앱 설치 허용'을 한 번 요청할 수 있습니다.
           EOF
           )
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$APK_PATH" --clobber
             gh release edit "$TAG" --notes "$NOTES"
           else
-            gh release create "$TAG" "$APK_PATH" \
-              --target "$GITHUB_SHA" \
-              --title "사과 재배 관리 비서 ${VERSION}" \
-              --notes "$NOTES"
+            gh release create "$TAG" "$APK_PATH" --target "$GITHUB_SHA" --title "사과 재배 관리 비서 ${VERSION}" --notes "$NOTES"
           fi
