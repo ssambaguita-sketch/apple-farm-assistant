@@ -2,7 +2,7 @@ from typing import List, Optional
 
 from fastapi import HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select, update
+from sqlalchemy import MetaData, Table, delete, inspect, select, update
 from sqlalchemy.exc import IntegrityError
 
 import main
@@ -14,6 +14,10 @@ class OrchardUpdateIn(BaseModel):
     area_m2: float = 0
     tree_count: int = 0
     growth_stage: str = ""
+
+
+class OrchardDeleteIn(BaseModel):
+    confirm_name: str
 
 
 def _run_secondary_update(statement):
@@ -57,6 +61,34 @@ def _cascade_orchard_name(old_name: str, new_name: str):
         )
     except Exception as exc:
         print(f"[weed cascade warning] {type(exc).__name__}: {exc}")
+
+
+def _delete_linked_orchard_rows(connection, orchard_name: str):
+    """Delete app records that explicitly belong to the orchard.
+
+    Tables are reflected so newer modules that also store an `orchard` column
+    are cleaned up without requiring this endpoint to know every feature table.
+    The orchards table itself is intentionally excluded and removed last.
+    """
+    inspector = inspect(main.engine)
+    metadata = MetaData()
+    deleted = {}
+
+    for table_name in inspector.get_table_names():
+        if table_name == main.orchards.name:
+            continue
+        try:
+            columns = {c["name"] for c in inspector.get_columns(table_name)}
+            if "orchard" not in columns:
+                continue
+            table = Table(table_name, metadata, autoload_with=connection)
+            result = connection.execute(delete(table).where(table.c.orchard == orchard_name))
+            deleted[table_name] = max(0, int(result.rowcount or 0))
+        except Exception as exc:
+            print(f"[orchard linked delete warning] {table_name}: {type(exc).__name__}: {exc}")
+            raise HTTPException(500, f"연결 데이터 정리 중 오류가 발생했습니다: {table_name}")
+
+    return deleted
 
 
 @main.app.put("/api/orchards/{orchard_id}")
@@ -117,6 +149,52 @@ def update_orchard(orchard_id: int, x: OrchardUpdateIn):
         "tree_count": max(0, x.tree_count),
         "growth_stage": x.growth_stage.strip(),
     }
+
+
+@main.app.delete("/api/orchards/{orchard_id}")
+def delete_orchard(orchard_id: int, x: OrchardDeleteIn):
+    """Permanently delete one orchard after an exact-name confirmation.
+
+    At least one orchard must remain so the app always has a valid selection.
+    All feature rows carrying the same `orchard` value are deleted in the same
+    transaction before the orchard row itself is removed.
+    """
+    confirm_name = x.confirm_name.strip()
+    try:
+        with main.engine.begin() as c:
+            row = c.execute(
+                select(main.orchards).where(main.orchards.c.id == orchard_id)
+            ).mappings().first()
+            if not row:
+                raise HTTPException(404, "과수원을 찾을 수 없습니다")
+
+            orchard_name = str(row.get("name") or "")
+            if not confirm_name or confirm_name != orchard_name:
+                raise HTTPException(400, "삭제 확인용 과수원 이름이 일치하지 않습니다")
+
+            orchard_count = c.execute(select(main.orchards.c.id)).all()
+            if len(orchard_count) <= 1:
+                raise HTTPException(409, "마지막 과수원은 삭제할 수 없습니다. 다른 과수원을 먼저 추가하세요")
+
+            linked_deleted = _delete_linked_orchard_rows(c, orchard_name)
+            c.execute(delete(main.orchards).where(main.orchards.c.id == orchard_id))
+
+            next_row = c.execute(
+                select(main.orchards).order_by(main.orchards.c.id.asc()).limit(1)
+            ).mappings().first()
+
+        return {
+            "ok": True,
+            "deleted_id": orchard_id,
+            "deleted_name": orchard_name,
+            "linked_deleted": linked_deleted,
+            "next_orchard": dict(next_row) if next_row else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"[orchard delete error] {type(exc).__name__}: {exc}")
+        raise HTTPException(500, f"과수원 삭제 중 서버 오류: {type(exc).__name__}")
 
 
 class OrchardCreateMultiIn(BaseModel):
