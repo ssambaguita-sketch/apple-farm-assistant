@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'finance_page.dart';
 import 'gps_settings_page.dart';
+import 'notification_settings_page.dart';
 import 'server_diagnostics_page.dart';
 import 'services/orchard_selection.dart';
 
@@ -50,6 +51,17 @@ class ManagementPage extends StatelessWidget {
             subtitle: const Text('GitHub Releases에서 최신 APK를 받습니다. 첫 설치 때만 브라우저의 “이 출처 허용” 설정이 필요할 수 있습니다.'),
             trailing: const Icon(Icons.open_in_new_rounded),
             onTap: () => _openOfficialRelease(context),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Card(
+          color: const Color(0xFFFFF6E8),
+          child: ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.notifications_active_rounded)),
+            title: const Text('추천작업 강화 알림', style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: const Text('P3~P5 자동추천 작업 반복 알림 · 완료 시 자동 해제 · 테스트 알림'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _open(context, '추천작업 강화 알림', const NotificationSettingsPage()),
           ),
         ),
         const SizedBox(height: 10),
