@@ -5,6 +5,9 @@ on:
   push:
     branches: [ "main", "master" ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -69,9 +72,39 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release -t lib/app_entry.dart
 
-      - name: Upload APK
+      - name: Prepare official APK name
+        id: release_meta
+        shell: bash
+        run: |
+          FULL_VERSION=$(awk '/^version:/ {print $2; exit}' pubspec.yaml)
+          TAG="v${FULL_VERSION}"
+          mkdir -p dist
+          APK_NAME="apple-farm-assistant-${TAG}.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/${APK_NAME}"
+          echo "version=${FULL_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "apk_name=${APK_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: apple-farm-assistant-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: dist/${{ steps.release_meta.outputs.apk_name }}
           retention-days: 30
+
+      - name: Publish official GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release_meta.outputs.tag }}
+          APK_PATH: dist/${{ steps.release_meta.outputs.apk_name }}
+          VERSION: ${{ steps.release_meta.outputs.version }}
+        shell: bash
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK_PATH" --clobber
+          else
+            gh release create "$TAG" "$APK_PATH" \
+              --target "$GITHUB_SHA" \
+              --title "사과 재배 관리 비서 ${VERSION}" \
+              --notes "공식 Android APK 배포입니다. 앱의 경영·설정 > 앱 업데이트·공식 설치 출처 메뉴에서도 이 Release 페이지를 열 수 있습니다. Android에서 첫 설치 시 사용 중인 브라우저 또는 파일 앱에 대해 '이 출처의 앱 설치 허용'을 한 번 요청할 수 있습니다."
+          fi
