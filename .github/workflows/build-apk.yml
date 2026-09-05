@@ -62,15 +62,89 @@ jobs:
           p.write_text(s)
           PY
 
+      - name: Configure stable Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" && -n "${ANDROID_KEYSTORE_PASSWORD:-}" && -n "${ANDROID_KEY_ALIAS:-}" && -n "${ANDROID_KEY_PASSWORD:-}" ]]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks
+            cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=release-keystore.jks
+          EOF
+
+            python3 - <<'PY'
+          from pathlib import Path
+
+          kts = Path('android/app/build.gradle.kts')
+          groovy = Path('android/app/build.gradle')
+
+          if kts.exists():
+              s = kts.read_text()
+              if 'val keystoreProperties' not in s:
+                  prefix = '''import java.util.Properties\nimport java.io.FileInputStream\n\nval keystoreProperties = Properties()\nval keystorePropertiesFile = rootProject.file("key.properties")\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n}\n\n'''
+                  s = prefix + s
+              marker = '    buildTypes {\n'
+              signing = '''    signingConfigs {\n        create("release") {\n            keyAlias = keystoreProperties["keyAlias"] as String\n            keyPassword = keystoreProperties["keyPassword"] as String\n            storeFile = file(keystoreProperties["storeFile"] as String)\n            storePassword = keystoreProperties["storePassword"] as String\n        }\n    }\n\n'''
+              if 'create("release")' not in s:
+                  s = s.replace(marker, signing + marker, 1)
+              s = s.replace('signingConfig = signingConfigs.getByName("debug")', 'signingConfig = signingConfigs.getByName("release")')
+              kts.write_text(s)
+          elif groovy.exists():
+              s = groovy.read_text()
+              if 'def keystoreProperties' not in s:
+                  prefix = '''def keystoreProperties = new Properties()\ndef keystorePropertiesFile = rootProject.file('key.properties')\nif (keystorePropertiesFile.exists()) {\n    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n}\n\n'''
+                  s = prefix + s
+              marker = '    buildTypes {\n'
+              signing = '''    signingConfigs {\n        release {\n            keyAlias keystoreProperties['keyAlias']\n            keyPassword keystoreProperties['keyPassword']\n            storeFile file(keystoreProperties['storeFile'])\n            storePassword keystoreProperties['storePassword']\n        }\n    }\n\n'''
+              if 'signingConfigs {' not in s:
+                  s = s.replace(marker, signing + marker, 1)
+              s = s.replace('signingConfig signingConfigs.debug', 'signingConfig signingConfigs.release')
+              groovy.write_text(s)
+          else:
+              raise SystemExit('Android app Gradle file not found')
+          PY
+            keytool -list -keystore android/app/release-keystore.jks -storepass "$ANDROID_KEYSTORE_PASSWORD" -alias "$ANDROID_KEY_ALIAS" >/dev/null
+            echo "ANDROID_SIGNING_MODE=stable" >> "$GITHUB_ENV"
+            echo "Stable release signing enabled."
+          else
+            echo "ANDROID_SIGNING_MODE=fallback" >> "$GITHUB_ENV"
+            echo "Stable signing secrets are not configured; using Flutter template fallback signing."
+          fi
+
       - name: Get dependencies
         run: flutter pub get
 
       - name: Analyze
         run: flutter analyze
-        continue-on-error: true
 
       - name: Build release APK
         run: flutter build apk --release -t lib/app_entry.dart
+
+      - name: Verify APK signature and checksum
+        id: apk_verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -f "$APK"
+          SHA256=$(sha256sum "$APK" | awk '{print $1}')
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+          if [[ -n "$APKSIGNER" ]]; then
+            "$APKSIGNER" verify --verbose --print-certs "$APK"
+          else
+            echo "apksigner not found; checksum verification only."
+          fi
+          echo "APK SHA-256: $SHA256"
+          echo "Signing mode: ${ANDROID_SIGNING_MODE:-fallback}"
 
       - name: Prepare official APK name
         id: release_meta
@@ -98,13 +172,27 @@ jobs:
           TAG: ${{ steps.release_meta.outputs.tag }}
           APK_PATH: dist/${{ steps.release_meta.outputs.apk_name }}
           VERSION: ${{ steps.release_meta.outputs.version }}
+          APK_SHA256: ${{ steps.apk_verify.outputs.sha256 }}
         shell: bash
         run: |
+          NOTES=$(cat <<EOF
+          공식 Android APK 배포입니다.
+
+          - 버전: ${VERSION}
+          - APK SHA-256: ${APK_SHA256}
+          - Android 서명 모드: ${ANDROID_SIGNING_MODE:-fallback}
+          - 공식 설치 출처: 이 GitHub Releases 페이지
+
+          앱의 경영·설정 > 앱 업데이트·공식 설치 출처 메뉴에서도 이 페이지를 열 수 있습니다.
+          Android에서 첫 설치 시 사용 중인 브라우저 또는 파일 앱에 대해 '이 출처의 앱 설치 허용'을 한 번 요청할 수 있습니다.
+          EOF
+          )
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$APK_PATH" --clobber
+            gh release edit "$TAG" --notes "$NOTES"
           else
             gh release create "$TAG" "$APK_PATH" \
               --target "$GITHUB_SHA" \
               --title "사과 재배 관리 비서 ${VERSION}" \
-              --notes "공식 Android APK 배포입니다. 앱의 경영·설정 > 앱 업데이트·공식 설치 출처 메뉴에서도 이 Release 페이지를 열 수 있습니다. Android에서 첫 설치 시 사용 중인 브라우저 또는 파일 앱에 대해 '이 출처의 앱 설치 허용'을 한 번 요청할 수 있습니다."
+              --notes "$NOTES"
           fi
