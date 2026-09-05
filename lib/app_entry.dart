@@ -7,6 +7,7 @@ import 'orchard_manager_page.dart';
 import 'weed_intelligence_page.dart';
 import 'management_page.dart';
 import 'services/farm_api.dart';
+import 'services/integrated_api.dart';
 import 'services/orchard_api.dart';
 import 'services/orchard_selection.dart';
 
@@ -73,7 +74,10 @@ class AnnualHome extends StatefulWidget {
 class _AnnualHomeState extends State<AnnualHome> {
   int index = 0;
   final orchardApi = OrchardApi();
+  final integratedApi = IntegratedApi();
   List<Map<String, dynamic>> orchards = [];
+  Map<String, dynamic> integrated = {};
+  bool syncing = false;
   late List<Widget> pages;
 
   @override
@@ -104,6 +108,22 @@ class _AnnualHomeState extends State<AnnualHome> {
     }
     if (!mounted) return;
     setState(() => orchards = r);
+    await _refreshIntegrated(syncTasks: true);
+  }
+
+  Future<void> _refreshIntegrated({bool syncTasks = false, bool force = false}) async {
+    if (syncing) return;
+    if (mounted) setState(() => syncing = true);
+    try {
+      if (syncTasks) {
+        await integratedApi.syncTasks();
+      }
+      final data = await integratedApi.briefing(refresh: force);
+      if (!mounted) return;
+      setState(() => integrated = data);
+    } finally {
+      if (mounted) setState(() => syncing = false);
+    }
   }
 
   Future<void> choose(String? name) async {
@@ -113,8 +133,10 @@ class _AnnualHomeState extends State<AnnualHome> {
           orElse: () => <String, dynamic>{'name': name, 'variety': ''},
         );
     await OrchardSelection.select(name, varietyText: '${item['variety'] ?? ''}');
+    integratedApi.invalidate();
     _rebuildPages();
     if (mounted) setState(() {});
+    await _refreshIntegrated(syncTasks: true, force: true);
   }
 
   Future<void> openManager() async {
@@ -125,6 +147,7 @@ class _AnnualHomeState extends State<AnnualHome> {
         body: const SafeArea(child: OrchardManagerPage()),
       ),
     ));
+    integratedApi.invalidate();
     await loadOrchards();
     _rebuildPages();
     if (mounted) setState(() {});
@@ -205,6 +228,45 @@ class _AnnualHomeState extends State<AnnualHome> {
     );
   }
 
+  Widget _integratedBar() {
+    final actions = List<dynamic>.from(integrated['actions'] ?? const []);
+    final observations = Map<String, dynamic>.from(integrated['observations'] ?? const {});
+    final finance = Map<String, dynamic>.from(integrated['finance'] ?? const {});
+    final annual = Map<String, dynamic>.from(integrated['annual'] ?? const {});
+    final offline = integrated['offline_mode'] == true;
+
+    return Material(
+      color: offline ? const Color(0xFFFFF4E8) : const Color(0xFFEAF5E5),
+      child: InkWell(
+        onTap: syncing ? null : () => _refreshIntegrated(syncTasks: true, force: true),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 7, 10, 7),
+          child: Row(
+            children: [
+              Icon(offline ? Icons.sync_problem_rounded : Icons.hub_rounded,
+                  size: 18, color: offline ? const Color(0xFF9A6230) : const Color(0xFF2F6B35)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  offline
+                      ? '통합 엔진 연결 확인 필요'
+                      : '통합 엔진 · ${annual['month'] ?? '-'}월 · 우선작업 ${actions.length} · 위험 ${observations['max_risk'] ?? 0}/5 · 순이익 ${finance['profit'] ?? 0}원',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                ),
+              ),
+              if (syncing)
+                const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              else
+                const Icon(Icons.sync_rounded, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ValueListenableBuilder<String>(
         valueListenable: OrchardSelection.notifier,
@@ -213,6 +275,7 @@ class _AnnualHomeState extends State<AnnualHome> {
             child: Column(
               children: [
                 _compactTopBar(selected),
+                _integratedBar(),
                 const Divider(height: 1, color: Color(0x10000000)),
                 Expanded(
                   child: IndexedStack(
