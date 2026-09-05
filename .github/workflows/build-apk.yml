@@ -59,7 +59,6 @@ jobs:
           render_icon 96  android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
           render_icon 144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
           render_icon 192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-          echo "Selected fourth launcher icon applied to all Android densities."
 
       - name: Fix Flutter source
         run: |
@@ -84,15 +83,16 @@ jobs:
               '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n'
               '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n'
               '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n'
-              '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>'
+              '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>\n'
+              '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>'
           )
           if 'android.permission.INTERNET' not in s:
               s = s.replace(manifest_tag, manifest_tag + '\n    ' + perms)
           else:
-              if 'android.permission.POST_NOTIFICATIONS' not in s:
-                  s = s.replace(manifest_tag, manifest_tag + '\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>')
-              if 'android.permission.RECEIVE_BOOT_COMPLETED' not in s:
-                  s = s.replace(manifest_tag, manifest_tag + '\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>')
+              for permission in ['POST_NOTIFICATIONS', 'RECEIVE_BOOT_COMPLETED', 'REQUEST_INSTALL_PACKAGES']:
+                  full = f'android.permission.{permission}'
+                  if full not in s:
+                      s = s.replace(manifest_tag, manifest_tag + f'\n    <uses-permission android:name="{full}"/>')
           if 'usesCleartextTraffic' not in s:
               s = s.replace('<application', '<application android:usesCleartextTraffic="true"', 1)
           receivers = '''
@@ -229,9 +229,10 @@ jobs:
           - APK SHA-256: ${APK_SHA256}
           - Android 서명 모드: ${ANDROID_SIGNING_MODE:-fallback}
           - 앱 아이콘: 선택한 4번째 사과+달력 디자인
+          - 앱 안에서 업데이트: GitHub Release 확인 · APK 자동 다운로드 · Android 덮어쓰기 설치 지원
           - 추천작업 강화 알림: Android 고중요도 채널 · 반복 알림 · 재부팅 후 예약 복구 지원
 
-          앱의 경영·설정 > 앱 업데이트·공식 설치 출처 메뉴에서도 이 페이지를 열 수 있습니다.
+          경영·설정 > 앱 안에서 업데이트에서 이후 버전을 직접 갱신할 수 있습니다.
           EOF
           )
           if gh release view "$TAG" >/dev/null 2>&1; then
