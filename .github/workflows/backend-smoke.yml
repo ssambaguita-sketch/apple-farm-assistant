@@ -1,4 +1,4 @@
-name: Backend Finance Smoke Test
+name: Backend Smoke Test
 
 on:
   push:
@@ -31,3 +31,8 @@ jobs:
         env:
           PYTHONPATH: backend
         run: python backend/test_finance_smoke.py
+
+      - name: Run phenology smoke test
+        env:
+          PYTHONPATH: backend
+        run: python backend/test_phenology_smoke.py
