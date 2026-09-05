@@ -41,3 +41,8 @@ jobs:
         env:
           PYTHONPATH: backend
         run: python backend/test_gps_smoke.py
+
+      - name: Run integrated engine smoke test
+        env:
+          PYTHONPATH: backend
+        run: python backend/test_integrated_engine_smoke.py
