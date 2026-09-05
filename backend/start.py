@@ -13,6 +13,7 @@ import finance_manager  # finance entries, summaries, harvest and profit checks
 import performance  # short-lived weather cache for faster dashboard loads
 import phenology_calendar  # Gregorian 12-month solar-term calendar with weather/GDD adjustment
 import gps_manager  # verified selected-orchard GPS save/status API
+import integrated_engine  # links annual, diagnosis, weed, foliar, finance, coach and tasks
 
 app = base_app.app
-app.version = "5.8.0"
+app.version = "5.9.0"
