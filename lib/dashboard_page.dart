@@ -14,6 +14,9 @@ class DashboardPageState extends State<DashboardPage> {
   final api = FarmApi();
   Map<String, dynamic> data = const {};
   bool loading = false;
+  bool _reloadAgain = false;
+  DateTime? _lastLoadedAt;
+  String _lastLoadedOrchard = '';
 
   String get orchard => OrchardSelection.name.trim();
 
@@ -21,7 +24,7 @@ class DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     OrchardSelection.notifier.addListener(_orchardChanged);
-    reload();
+    reload(force: true);
   }
 
   @override
@@ -31,18 +34,44 @@ class DashboardPageState extends State<DashboardPage> {
   }
 
   void _orchardChanged() {
-    reload();
+    _lastLoadedAt = null;
+    reload(force: true);
   }
 
-  Future<void> reload() async {
-    if (!mounted || loading) return;
-    setState(() => loading = true);
-    final result = await api.dashboard(orchard);
+  Future<void> reload({bool force = false}) async {
     if (!mounted) return;
-    setState(() {
-      data = result;
-      loading = false;
-    });
+    final targetOrchard = orchard;
+    if (targetOrchard.isEmpty) return;
+
+    final fresh = _lastLoadedAt != null &&
+        _lastLoadedOrchard == targetOrchard &&
+        DateTime.now().difference(_lastLoadedAt!) < const Duration(seconds: 15);
+    if (!force && fresh) return;
+
+    if (loading) {
+      _reloadAgain = _reloadAgain || force || _lastLoadedOrchard != targetOrchard;
+      return;
+    }
+
+    do {
+      _reloadAgain = false;
+      final requestOrchard = orchard;
+      if (!mounted || requestOrchard.isEmpty) return;
+      setState(() => loading = true);
+      final result = await api.dashboard(requestOrchard);
+      if (!mounted) return;
+      if (requestOrchard == orchard) {
+        setState(() {
+          data = result;
+          loading = false;
+          _lastLoadedAt = DateTime.now();
+          _lastLoadedOrchard = requestOrchard;
+        });
+      } else {
+        setState(() => loading = false);
+        _reloadAgain = true;
+      }
+    } while (_reloadAgain && mounted);
   }
 
   Widget _evidenceRow(IconData icon, String label, String value) => Padding(
@@ -110,7 +139,7 @@ class DashboardPageState extends State<DashboardPage> {
     final confidence = '${data['recommendation_confidence'] ?? '-'}';
 
     return RefreshIndicator(
-      onRefresh: reload,
+      onRefresh: () => reload(force: true),
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
@@ -133,7 +162,7 @@ class DashboardPageState extends State<DashboardPage> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: loading ? null : reload,
+              onPressed: loading ? null : () => reload(force: true),
               icon: const Icon(Icons.refresh_rounded),
               label: Text(loading ? '불러오는 중...' : '오늘 브리핑'),
             ),
