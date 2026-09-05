@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'services/diagnosis_api.dart';
+import 'services/orchard_selection.dart';
 
 class DiagnosisPage extends StatefulWidget {
   const DiagnosisPage({super.key});
@@ -15,7 +16,6 @@ class DiagnosisPage extends StatefulWidget {
 class _DiagnosisPageState extends State<DiagnosisPage> {
   final api = DiagnosisApi();
   final picker = ImagePicker();
-  final orchard = TextEditingController(text: 'A과수원');
   final note = TextEditingController();
   final List<XFile> photos = [];
 
@@ -32,12 +32,14 @@ class _DiagnosisPageState extends State<DiagnosisPage> {
   bool loading = false;
   Map<String, dynamic> result = {};
 
+  @override
+  void dispose() {
+    note.dispose();
+    super.dispose();
+  }
+
   Future<void> capture() async {
-    final shot = await picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 82,
-      maxWidth: 1800,
-    );
+    final shot = await picker.pickImage(source: ImageSource.camera, imageQuality: 82, maxWidth: 1800);
     if (shot == null) return;
     setState(() => photos.add(shot));
   }
@@ -45,7 +47,7 @@ class _DiagnosisPageState extends State<DiagnosisPage> {
   Future<void> assess() async {
     setState(() => loading = true);
     final r = await api.assess({
-      'orchard': orchard.text.trim().isEmpty ? 'A과수원' : orchard.text.trim(),
+      'orchard': OrchardSelection.name,
       'has_photo': photos.isNotEmpty,
       'organ': organ,
       'leaf_age': leafAge,
@@ -103,7 +105,7 @@ class _DiagnosisPageState extends State<DiagnosisPage> {
       return Card(child: ListTile(leading: const Icon(Icons.warning_amber), title: const Text('진단 실패'), subtitle: Text('${result['error']}')));
     }
     final scores = (result['category_scores'] as List?) ?? [];
-    final context = result['context'] is Map ? Map<String, dynamic>.from(result['context'] as Map) : <String, dynamic>{};
+    final ctx = result['context'] is Map ? Map<String, dynamic>.from(result['context'] as Map) : <String, dynamic>{};
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const SizedBox(height: 16),
       const Text('판정 결과', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
@@ -140,12 +142,13 @@ class _DiagnosisPageState extends State<DiagnosisPage> {
           padding: const EdgeInsets.all(12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('판정에 사용한 환경자료', style: TextStyle(fontWeight: FontWeight.bold)),
-            Text('기상: ${context['weather_source'] ?? '-'}'),
-            Text('최고기온: ${context['forecast_max_temp_c'] ?? '-'}℃'),
-            Text('최고습도: ${context['forecast_max_humidity_pct'] ?? '-'}%'),
-            Text('최대 강수확률: ${context['forecast_max_rain_probability_pct'] ?? '-'}%'),
-            Text('생육단계: ${context['growth_stage'] ?? '-'}'),
-            Text('사진 증거: ${context['photo_recorded'] == true ? '있음' : '없음'}'),
+            Text('과수원: ${OrchardSelection.name}'),
+            Text('기상: ${ctx['weather_source'] ?? '-'}'),
+            Text('최고기온: ${ctx['forecast_max_temp_c'] ?? '-'}℃'),
+            Text('최고습도: ${ctx['forecast_max_humidity_pct'] ?? '-'}%'),
+            Text('최대 강수확률: ${ctx['forecast_max_rain_probability_pct'] ?? '-'}%'),
+            Text('생육단계: ${ctx['growth_stage'] ?? '-'}'),
+            Text('사진 증거: ${ctx['photo_recorded'] == true ? '있음' : '없음'}'),
             const SizedBox(height: 6),
             const Text('현재 버전은 사진을 자동 영상판독하지 않고 현장 증거로 기록합니다.', style: TextStyle(fontSize: 12)),
           ]),
@@ -162,7 +165,13 @@ class _DiagnosisPageState extends State<DiagnosisPage> {
         const Text('📷 결핍·병해충 진단', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
         const Text('사진 증거 + 시각 특징 + KMA 기상 + 생육정보를 합쳐 후보와 위협도를 계산합니다.'),
         const SizedBox(height: 12),
-        TextField(controller: orchard, decoration: const InputDecoration(labelText: '과수원', border: OutlineInputBorder())),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.park_outlined),
+            title: const Text('진단 대상 과수원'),
+            subtitle: Text('${OrchardSelection.name} · ${OrchardSelection.varieties}'),
+          ),
+        ),
         const SizedBox(height: 12),
         Card(
           child: Padding(
