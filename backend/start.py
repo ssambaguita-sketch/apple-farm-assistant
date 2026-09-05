@@ -8,6 +8,7 @@ import recommendation_zones  # targets recommendations to concrete orchard zones
 import recommendation_diagnosis  # runs diagnosis pre-checks for recommendation candidates
 import behavior_coach  # non-diagnostic behavioral screening and coaching
 import orchard_management  # multi-orchard and multi-variety management
+import orchard_remove_alias  # confirmed orchard removal endpoint for mobile clients
 import weed_intelligence  # camera-assisted weed timing and history analysis
 import finance_manager  # finance entries, summaries, harvest and profit checks
 import performance  # short-lived weather cache for faster dashboard loads
@@ -16,4 +17,4 @@ import gps_manager  # verified selected-orchard GPS save/status API
 import integrated_engine  # links annual, diagnosis, weed, foliar, finance, coach and tasks
 
 app = base_app.app
-app.version = "5.9.0"
+app.version = "6.0.0"
