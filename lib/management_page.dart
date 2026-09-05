@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'finance_page.dart';
+import 'gps_settings_page.dart';
 import 'main.dart' as legacy;
 import 'services/orchard_selection.dart';
 
@@ -39,9 +40,19 @@ class ManagementPage extends StatelessWidget {
         const SizedBox(height: 10),
         Card(
           child: ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.my_location_rounded)),
+            title: const Text('과수원 GPS', style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: const Text('현재 선택 과수원에 GPS 저장 · DB 재조회 검증 · KMA 격자 확인'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _open(context, '과수원 GPS', const GpsSettingsPage()),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Card(
+          child: ListTile(
             leading: const CircleAvatar(child: Icon(Icons.settings_outlined)),
-            title: const Text('서버 · GPS · 기능 진단', style: TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: const Text('서버 연결, KMA, 과수원 위치, 전체 기능 진단'),
+            title: const Text('서버 · 기능 진단', style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: const Text('서버 연결, KMA 상태, 작업·코치 API 전체 기능 진단'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _open(context, '설정 · 기능 진단', const legacy.MorePage()),
           ),
