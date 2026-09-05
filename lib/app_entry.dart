@@ -5,14 +5,17 @@ import 'recommendation_diagnosis_page.dart';
 import 'behavior_coach_page.dart';
 import 'orchard_manager_page.dart';
 import 'weed_intelligence_page.dart';
+import 'management_page.dart';
 import 'services/farm_api.dart';
 import 'services/orchard_api.dart';
 import 'services/orchard_selection.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await FarmApi.initialize();
-  await OrchardSelection.initialize();
+  await Future.wait([
+    FarmApi.initialize(),
+    OrchardSelection.initialize(),
+  ]);
   runApp(const AnnualApp());
 }
 
@@ -71,39 +74,46 @@ class _AnnualHomeState extends State<AnnualHome> {
   int index = 0;
   final orchardApi = OrchardApi();
   List<Map<String, dynamic>> orchards = [];
-
-  List<Widget> get pages => const [
-        legacy.DashboardPage(),
-        VarietyAnnualFlowPage(),
-        RecommendationDiagnosisPage(),
-        legacy.TaskPage(),
-        WeedIntelligencePage(),
-        BehaviorCoachPage(),
-        legacy.MorePage(),
-      ];
+  late List<Widget> pages;
 
   @override
   void initState() {
     super.initState();
+    _rebuildPages();
     loadOrchards();
+  }
+
+  void _rebuildPages() {
+    pages = const [
+      legacy.DashboardPage(),
+      VarietyAnnualFlowPage(),
+      RecommendationDiagnosisPage(),
+      legacy.TaskPage(),
+      WeedIntelligencePage(),
+      BehaviorCoachPage(),
+      ManagementPage(),
+    ];
   }
 
   Future<void> loadOrchards() async {
     final r = await orchardApi.list();
     if (!mounted) return;
-    setState(() => orchards = r);
     if (r.isNotEmpty && !r.any((x) => '${x['name']}' == OrchardSelection.name)) {
       await OrchardSelection.select('${r.first['name']}', varietyText: '${r.first['variety'] ?? ''}');
+      _rebuildPages();
     }
+    if (!mounted) return;
+    setState(() => orchards = r);
   }
 
   Future<void> choose(String? name) async {
-    if (name == null) return;
+    if (name == null || name == OrchardSelection.name) return;
     final item = orchards.cast<Map<String, dynamic>>().firstWhere(
           (x) => '${x['name']}' == name,
           orElse: () => <String, dynamic>{'name': name, 'variety': ''},
         );
     await OrchardSelection.select(name, varietyText: '${item['variety'] ?? ''}');
+    _rebuildPages();
     if (mounted) setState(() {});
   }
 
@@ -116,6 +126,7 @@ class _AnnualHomeState extends State<AnnualHome> {
       ),
     ));
     await loadOrchards();
+    _rebuildPages();
     if (mounted) setState(() {});
   }
 
@@ -204,9 +215,9 @@ class _AnnualHomeState extends State<AnnualHome> {
                 _compactTopBar(selected),
                 const Divider(height: 1, color: Color(0x10000000)),
                 Expanded(
-                  child: KeyedSubtree(
-                    key: ValueKey('$index-$selected'),
-                    child: pages[index],
+                  child: IndexedStack(
+                    index: index,
+                    children: pages,
                   ),
                 ),
               ],
@@ -214,7 +225,9 @@ class _AnnualHomeState extends State<AnnualHome> {
           ),
           bottomNavigationBar: NavigationBar(
             selectedIndex: index,
-            onDestinationSelected: (v) => setState(() => index = v),
+            onDestinationSelected: (v) {
+              if (v != index) setState(() => index = v);
+            },
             destinations: const [
               NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: '홈'),
               NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month_rounded), label: '연간'),
@@ -222,7 +235,7 @@ class _AnnualHomeState extends State<AnnualHome> {
               NavigationDestination(icon: Icon(Icons.task_alt_outlined), selectedIcon: Icon(Icons.task_alt_rounded), label: '작업'),
               NavigationDestination(icon: Icon(Icons.grass_outlined), selectedIcon: Icon(Icons.grass_rounded), label: '잡초'),
               NavigationDestination(icon: Icon(Icons.psychology_outlined), selectedIcon: Icon(Icons.psychology_alt_rounded), label: '코치'),
-              NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings_rounded), label: '설정'),
+              NavigationDestination(icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet_rounded), label: '경영·설정'),
             ],
           ),
         ),
