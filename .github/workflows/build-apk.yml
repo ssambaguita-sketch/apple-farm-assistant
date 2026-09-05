@@ -44,10 +44,11 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Add Android permissions
+      - name: Configure Android permissions and notifications
         run: |
           python3 - <<'PY'
           from pathlib import Path
+
           p = Path("android/app/src/main/AndroidManifest.xml")
           s = p.read_text()
           manifest_tag = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
@@ -55,13 +56,51 @@ jobs:
               '<uses-permission android:name="android.permission.INTERNET"/>\n'
               '    <uses-permission android:name="android.permission.CAMERA"/>\n'
               '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n'
-              '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>'
+              '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n'
+              '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n'
+              '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>'
           )
           if 'android.permission.INTERNET' not in s:
               s = s.replace(manifest_tag, manifest_tag + '\n    ' + perms)
+          else:
+              if 'android.permission.POST_NOTIFICATIONS' not in s:
+                  s = s.replace(manifest_tag, manifest_tag + '\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>')
+              if 'android.permission.RECEIVE_BOOT_COMPLETED' not in s:
+                  s = s.replace(manifest_tag, manifest_tag + '\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>')
           if 'usesCleartextTraffic' not in s:
               s = s.replace('<application', '<application android:usesCleartextTraffic="true"', 1)
+
+          receivers = '''
+              <receiver
+                  android:exported="false"
+                  android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+              <receiver
+                  android:exported="false"
+                  android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+                  <intent-filter>
+                      <action android:name="android.intent.action.BOOT_COMPLETED" />
+                      <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                      <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                      <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                  </intent-filter>
+              </receiver>
+          '''
+          if 'ScheduledNotificationReceiver' not in s:
+              s = s.replace('</application>', receivers + '\n    </application>')
           p.write_text(s)
+
+          kts = Path('android/app/build.gradle.kts')
+          if kts.exists():
+              g = kts.read_text()
+              if 'isCoreLibraryDesugaringEnabled' not in g:
+                  g = g.replace(
+                      'compileOptions {',
+                      'compileOptions {\n        isCoreLibraryDesugaringEnabled = true',
+                      1,
+                  )
+              if 'coreLibraryDesugaring(' not in g:
+                  g += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+              kts.write_text(g)
           PY
 
       - name: Configure stable Android signing
@@ -184,6 +223,7 @@ jobs:
           - APK SHA-256: ${APK_SHA256}
           - Android 서명 모드: ${ANDROID_SIGNING_MODE:-fallback}
           - 공식 설치 출처: 이 GitHub Releases 페이지
+          - 추천작업 강화 알림: Android 고중요도 채널 · 반복 알림 · 재부팅 후 예약 복구 지원
 
           앱의 경영·설정 > 앱 업데이트·공식 설치 출처 메뉴에서도 이 페이지를 열 수 있습니다.
           Android에서 첫 설치 시 사용 중인 브라우저 또는 파일 앱에 대해 '이 출처의 앱 설치 허용'을 한 번 요청할 수 있습니다.
