@@ -11,6 +11,7 @@ import orchard_management  # multi-orchard and multi-variety management
 import weed_intelligence  # camera-assisted weed timing and history analysis
 import finance_manager  # finance entries, summaries, harvest and profit checks
 import performance  # short-lived weather cache for faster dashboard loads
+import phenology_calendar  # Gregorian 12-month solar-term calendar with weather/GDD adjustment
 
 app = base_app.app
-app.version = "5.6.0"
+app.version = "5.7.0"
