@@ -16,7 +16,10 @@ class TaskManagementPageState extends State<TaskManagementPage> {
   final notifications = TaskNotificationService.instance;
   List<dynamic> items = const [];
   bool loading = false;
+  bool _reloadAgain = false;
   String message = '';
+  DateTime? _lastLoadedAt;
+  String _lastLoadedOrchard = '';
 
   String get orchard => OrchardSelection.name.trim();
 
@@ -24,7 +27,7 @@ class TaskManagementPageState extends State<TaskManagementPage> {
   void initState() {
     super.initState();
     OrchardSelection.notifier.addListener(_orchardChanged);
-    reload();
+    reload(force: true);
   }
 
   @override
@@ -34,19 +37,47 @@ class TaskManagementPageState extends State<TaskManagementPage> {
   }
 
   void _orchardChanged() {
-    reload();
+    _lastLoadedAt = null;
+    reload(force: true);
   }
 
-  Future<void> reload() async {
-    if (!mounted || loading) return;
-    setState(() => loading = true);
-    final result = await api.tasks(orchard);
+  Future<void> reload({bool force = false}) async {
     if (!mounted) return;
-    setState(() {
-      items = result;
-      loading = false;
-    });
-    await notifications.syncTasks(result, orchard: orchard);
+    final targetOrchard = orchard;
+    if (targetOrchard.isEmpty) return;
+
+    final fresh = _lastLoadedAt != null &&
+        _lastLoadedOrchard == targetOrchard &&
+        DateTime.now().difference(_lastLoadedAt!) < const Duration(seconds: 15);
+    if (!force && fresh) return;
+
+    if (loading) {
+      _reloadAgain = _reloadAgain || force || _lastLoadedOrchard != targetOrchard;
+      return;
+    }
+
+    do {
+      _reloadAgain = false;
+      final requestOrchard = orchard;
+      if (!mounted || requestOrchard.isEmpty) return;
+      setState(() => loading = true);
+
+      final result = await api.tasks(requestOrchard);
+      if (!mounted) return;
+
+      if (requestOrchard == orchard) {
+        setState(() {
+          items = result;
+          loading = false;
+          _lastLoadedAt = DateTime.now();
+          _lastLoadedOrchard = requestOrchard;
+        });
+        await notifications.syncTasks(result, orchard: requestOrchard);
+      } else {
+        setState(() => loading = false);
+        _reloadAgain = true;
+      }
+    } while (_reloadAgain && mounted);
   }
 
   Future<void> add() async {
@@ -108,7 +139,8 @@ class TaskManagementPageState extends State<TaskManagementPage> {
     scheduled.dispose();
     if (ok == true) {
       if (mounted) setState(() => message = '✅ $orchard 작업 저장 완료');
-      await reload();
+      _lastLoadedAt = null;
+      await reload(force: true);
     } else if (ok == false && mounted) {
       setState(() => message = '작업 추가를 취소했습니다.');
     }
@@ -120,13 +152,14 @@ class TaskManagementPageState extends State<TaskManagementPage> {
     setState(() => message = ok ? '✅ 완료 처리됨 · 후속 알림도 해제했습니다.' : '⚠️ 완료 처리 실패');
     if (ok) {
       await notifications.cancelTask(id);
-      await reload();
+      _lastLoadedAt = null;
+      await reload(force: true);
     }
   }
 
   @override
   Widget build(BuildContext context) => RefreshIndicator(
-        onRefresh: reload,
+        onRefresh: () => reload(force: true),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
@@ -138,7 +171,7 @@ class TaskManagementPageState extends State<TaskManagementPage> {
                 ),
                 IconButton(
                   tooltip: '새로고침',
-                  onPressed: loading ? null : reload,
+                  onPressed: loading ? null : () => reload(force: true),
                   icon: const Icon(Icons.refresh_rounded),
                 ),
               ],
@@ -149,9 +182,9 @@ class TaskManagementPageState extends State<TaskManagementPage> {
               style: const TextStyle(color: Color(0xFF667067)),
             ),
             const SizedBox(height: 10),
-            Card(
-              color: const Color(0xFFFFF6E8),
-              child: const Padding(
+            const Card(
+              color: Color(0xFFFFF6E8),
+              child: Padding(
                 padding: EdgeInsets.all(14),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,7 +251,8 @@ class TaskManagementPageState extends State<TaskManagementPage> {
               final status = '${m['status'] ?? '예정'}';
               final auto = m['auto_recommended'] == true;
               final priority = m['priority'] ?? 2;
-              final strongAlert = auto && (priority is num ? priority.toInt() >= 3 : int.tryParse('$priority') != null && int.parse('$priority') >= 3);
+              final parsedPriority = priority is num ? priority.toInt() : int.tryParse('$priority') ?? 2;
+              final strongAlert = auto && parsedPriority >= 3;
               return Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: Card(
@@ -241,7 +275,7 @@ class TaskManagementPageState extends State<TaskManagementPage> {
                           ),
                       ],
                     ),
-                    subtitle: Text('${m['category'] ?? '일반'} · ${m['scheduled_at'] ?? ''} · P$priority'),
+                    subtitle: Text('${m['category'] ?? '일반'} · ${m['scheduled_at'] ?? ''} · P$parsedPriority'),
                     trailing: status == '완료'
                         ? const Text('완료', style: TextStyle(fontWeight: FontWeight.w700))
                         : IconButton(
