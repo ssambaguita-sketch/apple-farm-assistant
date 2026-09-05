@@ -13,7 +13,9 @@ class TaskNotificationService {
   static const _channelDescription = '놓치면 안 되는 추천작업을 반복해서 알려줍니다.';
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
+  final Map<String, Map<int, String>> _scheduledSignatures = {};
   bool _initialized = false;
+  bool? _enabledCache;
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -41,14 +43,20 @@ class TaskNotificationService {
   }
 
   Future<bool> isEnabled() async {
+    if (_enabledCache != null) return _enabledCache!;
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_enabledKey) ?? true;
+    _enabledCache = prefs.getBool(_enabledKey) ?? true;
+    return _enabledCache!;
   }
 
   Future<void> setEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_enabledKey, enabled);
-    if (!enabled) await _plugin.cancelAll();
+    _enabledCache = enabled;
+    if (!enabled) {
+      await _plugin.cancelAll();
+      _scheduledSignatures.clear();
+    }
   }
 
   NotificationDetails get _details => const NotificationDetails(
@@ -72,14 +80,20 @@ class TaskNotificationService {
   Future<void> cancelTask(int taskId) async {
     await initialize();
     final base = _baseId(taskId);
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < 3; i++) {
       await _plugin.cancel(base + i);
+    }
+    for (final map in _scheduledSignatures.values) {
+      map.remove(taskId);
     }
   }
 
   Future<void> syncTasks(List<dynamic> tasks, {required String orchard}) async {
     await initialize();
     if (!await isEnabled()) return;
+
+    final signatures = _scheduledSignatures.putIfAbsent(orchard, () => <int, String>{});
+    final activeIds = <int>{};
 
     for (final raw in tasks) {
       if (raw is! Map) continue;
@@ -88,17 +102,38 @@ class TaskNotificationService {
       if (idValue is! num) continue;
       final id = idValue.toInt();
       final status = '${task['status'] ?? ''}';
-      if (status == '완료') {
-        await cancelTask(id);
+      final auto = task['auto_recommended'] == true;
+      final priority = (task['priority'] is num)
+          ? (task['priority'] as num).toInt()
+          : int.tryParse('${task['priority']}') ?? 2;
+
+      if (status == '완료' || !auto || priority < 3) {
+        if (signatures.containsKey(id)) await cancelTask(id);
         continue;
       }
 
-      final auto = task['auto_recommended'] == true;
-      final priority = (task['priority'] is num) ? (task['priority'] as num).toInt() : int.tryParse('${task['priority']}') ?? 2;
-      if (!auto || priority < 3) continue;
+      activeIds.add(id);
+      final signature = _signature(task, orchard: orchard, priority: priority);
+      if (signatures[id] == signature) continue;
 
       await _scheduleTask(task, orchard: orchard, priority: priority);
+      signatures[id] = signature;
     }
+
+    final staleIds = signatures.keys.where((id) => !activeIds.contains(id)).toList();
+    for (final id in staleIds) {
+      await cancelTask(id);
+    }
+  }
+
+  String _signature(Map<String, dynamic> task, {required String orchard, required int priority}) {
+    return [
+      orchard,
+      task['title'] ?? '',
+      task['scheduled_at'] ?? '',
+      priority,
+      task['status'] ?? '',
+    ].join('|');
   }
 
   Future<void> _scheduleTask(Map<String, dynamic> task, {required String orchard, required int priority}) async {
@@ -110,10 +145,10 @@ class TaskNotificationService {
     final now = tz.TZDateTime.now(tz.local);
     final due = _parseDue(scheduledText, now) ?? now.add(const Duration(minutes: 2));
     final first = due.isBefore(now.add(const Duration(minutes: 1))) ? now.add(const Duration(minutes: 2)) : due;
-    final offsets = <Duration>[
+    const offsets = <Duration>[
       Duration.zero,
-      const Duration(minutes: 30),
-      const Duration(hours: 2),
+      Duration(minutes: 30),
+      Duration(hours: 2),
     ];
 
     final base = _baseId(id);
