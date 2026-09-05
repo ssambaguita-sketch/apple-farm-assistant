@@ -36,63 +36,147 @@ class VarietyAnnualFlowPage extends StatelessWidget {
     return out.isEmpty ? const ['후지'] : out;
   }
 
-  Widget _profileCard(BuildContext context) {
+  Widget _hero(BuildContext context) {
     final month = DateTime.now().month;
     final varieties = _varieties();
-    return Card(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            const Icon(Icons.tune_outlined),
-            const SizedBox(width: 8),
-            Expanded(child: Text('${OrchardSelection.name} · 품종별 연간 플로우 보정', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold))),
-          ]),
-          const SizedBox(height: 6),
-          Text('등록 품종: ${varieties.join(' · ')}'),
-          const SizedBox(height: 10),
-          ...varieties.map((v) {
-            final p = _profiles[v];
-            if (p == null) {
-              return ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: const Icon(Icons.eco_outlined), title: Text(v), subtitle: const Text('등록된 표준 숙기 프로필이 없어 기본 연간 플로우를 사용합니다.'));
-            }
-            final focus = Map<int, String>.from(p['focus'] as Map);
-            final current = focus[month] ?? '현재 월은 기본 연간 플로우를 사용하고 실제 생육단계·기상·관찰기록으로 보정합니다.';
-            return ListTile(dense: true, contentPadding: EdgeInsets.zero, leading: const Icon(Icons.apple_outlined), title: Text('$v · ${p['group']} · ${p['harvest']}'), subtitle: Text('$month월 집중: $current'));
-          }),
-          const SizedBox(height: 4),
-          const Text('※ 품종 숙기는 지역·대목·수세·기상에 따라 달라질 수 있습니다. 이 값은 예찰 시기 보정용이며 실제 생육단계가 우선합니다.', style: TextStyle(fontSize: 12)),
-        ]),
+    final first = varieties.first;
+    final p = _profiles[first];
+    final group = p?['group'] ?? '기본';
+    final harvest = p?['harvest'] ?? '생육단계 기준';
+    final focusMap = p == null ? <int, String>{} : Map<int, String>.from(p['focus'] as Map);
+    final focus = focusMap[month] ?? '실제 생육단계와 기상·관찰기록을 우선해 관리합니다.';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFEAF5E5), Color(0xFFF8FAF6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0x10000000)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(Icons.spa_outlined, color: Color(0xFF2F6B35)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${OrchardSelection.name} · 품종별 연간 플로우',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${varieties.join(' · ')} · $group · $harvest',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFF637064)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _miniInfo(Icons.calendar_today_outlined, '$month월 집중', focus)),
+              const SizedBox(width: 8),
+              Expanded(child: _miniInfo(Icons.flag_outlined, '관리 기준', '실제 생육단계 우선')),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _weedCard() {
+  Widget _miniInfo(IconData icon, String title, String value) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 74),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: const Color(0x0E000000)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: const Color(0xFF35733C)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12, height: 1.3, color: Color(0xFF4D574F)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _weedStrip() {
     final month = DateTime.now().month;
     final items = _weedPlan[month] ?? const <String>[];
-    return Card(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: const [
-            Icon(Icons.grass_outlined),
-            SizedBox(width: 8),
-            Text('이번 달 잡초·제초 연간 플로우', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-          ]),
-          const SizedBox(height: 6),
-          ...items.map((x) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Icon(Icons.arrow_right, size: 18),
-                  const SizedBox(width: 4),
-                  Expanded(child: Text(x)),
-                ]),
-              )),
-          const SizedBox(height: 4),
-          const Text('잡초 탭의 카메라 피복도·구역 이력·기상조건으로 실제 살포 적기 여부를 다시 계산합니다.', style: TextStyle(fontSize: 12)),
-        ]),
+    final primary = items.isNotEmpty ? items.first : '이번 달 잡초 관리 계획 확인';
+    final secondary = items.length > 1 ? items[1] : '잡초 탭에서 카메라·구역이력·기상으로 재평가';
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0x10000000)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const CircleAvatar(
+            radius: 18,
+            backgroundColor: Color(0xFFE1F0DC),
+            child: Icon(Icons.grass_rounded, color: Color(0xFF2F6B35), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('이번 달 잡초·제초', style: TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 4),
+                Text(primary, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(secondary, style: const TextStyle(fontSize: 12, color: Color(0xFF667067))),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -100,8 +184,8 @@ class VarietyAnnualFlowPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
         children: [
-          _profileCard(context),
-          _weedCard(),
+          _hero(context),
+          _weedStrip(),
           const Expanded(child: AnnualFlowPage()),
         ],
       );
