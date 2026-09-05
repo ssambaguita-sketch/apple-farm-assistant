@@ -81,41 +81,67 @@ class _AnnualHomeState extends State<AnnualHome> {
   List<Map<String, dynamic>> orchards = [];
   Map<String, dynamic> integrated = {};
   bool syncing = false;
-  late List<Widget> pages;
+  bool orchardReady = false;
+  List<Widget> pages = const [];
 
   @override
   void initState() {
     super.initState();
-    _rebuildPages();
+    OrchardSelection.notifier.addListener(_onSelectionChanged);
     loadOrchards();
   }
 
+  @override
+  void dispose() {
+    OrchardSelection.notifier.removeListener(_onSelectionChanged);
+    super.dispose();
+  }
+
+  void _onSelectionChanged() {
+    integratedApi.invalidate();
+    _rebuildPages();
+    if (mounted) setState(() => integrated = {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      dashboardKey.currentState?.reload();
+      taskKey.currentState?.reload();
+    });
+  }
+
   void _rebuildPages() {
+    final orchard = OrchardSelection.name;
     pages = [
       DashboardPage(key: dashboardKey),
-      const VarietyAnnualFlowPage(),
-      const RecommendationDiagnosisPage(),
+      VarietyAnnualFlowPage(key: ValueKey('annual:$orchard')),
+      RecommendationDiagnosisPage(key: ValueKey('diagnosis:$orchard')),
       TaskManagementPage(key: taskKey),
-      const WeedIntelligencePage(),
-      const BehaviorCoachPage(),
-      const ManagementPage(),
+      WeedIntelligencePage(key: ValueKey('weed:$orchard')),
+      BehaviorCoachPage(key: ValueKey('coach:$orchard')),
+      ManagementPage(key: ValueKey('management:$orchard')),
     ];
   }
 
   Future<void> loadOrchards() async {
     final r = await orchardApi.list();
     if (!mounted) return;
+
     if (r.isNotEmpty && !r.any((x) => '${x['name']}' == OrchardSelection.name)) {
-      await OrchardSelection.select('${r.first['name']}', varietyText: '${r.first['variety'] ?? ''}');
-      _rebuildPages();
+      await OrchardSelection.select(
+        '${r.first['name']}',
+        varietyText: '${r.first['variety'] ?? ''}',
+      );
     }
+
+    _rebuildPages();
     if (!mounted) return;
-    setState(() => orchards = r);
+    setState(() {
+      orchards = r;
+      orchardReady = true;
+    });
     await _refreshIntegrated(syncTasks: true);
   }
 
   Future<void> _refreshIntegrated({bool syncTasks = false, bool force = false}) async {
-    if (syncing) return;
+    if (syncing || !orchardReady) return;
     if (mounted) setState(() => syncing = true);
     try {
       Map<String, dynamic>? data;
@@ -144,9 +170,6 @@ class _AnnualHomeState extends State<AnnualHome> {
           orElse: () => <String, dynamic>{'name': name, 'variety': ''},
         );
     await OrchardSelection.select(name, varietyText: '${item['variety'] ?? ''}');
-    integratedApi.invalidate();
-    _rebuildPages();
-    if (mounted) setState(() {});
     await _refreshIntegrated(syncTasks: true, force: true);
   }
 
@@ -158,10 +181,7 @@ class _AnnualHomeState extends State<AnnualHome> {
         body: const SafeArea(child: OrchardManagerPage()),
       ),
     ));
-    integratedApi.invalidate();
     await loadOrchards();
-    _rebuildPages();
-    if (mounted) setState(() {});
   }
 
   Widget _compactTopBar(String selected) {
@@ -188,47 +208,44 @@ class _AnnualHomeState extends State<AnnualHome> {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: orchards.any((x) => '${x['name']}' == selected) ? selected : null,
-                hint: Text(selected),
-                isExpanded: true,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                selectedItemBuilder: (context) => orchards
-                    .map((x) => Align(
-                          alignment: Alignment.centerLeft,
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${x['name']}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                              ),
-                              Text(
-                                '${x['variety'] ?? '품종 미지정'}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 11, color: Color(0xFF667067)),
-                              ),
-                            ],
-                          ),
-                        ))
-                    .toList(),
-                items: orchards
-                    .map((x) => DropdownMenuItem<String>(
-                          value: '${x['name']}',
-                          child: Text('${x['name']} · ${x['variety'] ?? '품종 미지정'}'),
-                        ))
-                    .toList(),
-                onChanged: choose,
-              ),
-            ),
+            child: orchardReady && orchards.isNotEmpty
+                ? DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: orchards.any((x) => '${x['name']}' == selected) ? selected : null,
+                      hint: Text(selected),
+                      isExpanded: true,
+                      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                      selectedItemBuilder: (context) => orchards
+                          .map((x) => Align(
+                                alignment: Alignment.centerLeft,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('${x['name']}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                                    Text('${x['variety'] ?? '품종 미지정'}', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Color(0xFF667067))),
+                                  ],
+                                ),
+                              ))
+                          .toList(),
+                      items: orchards
+                          .map((x) => DropdownMenuItem<String>(
+                                value: '${x['name']}',
+                                child: Text('${x['name']} · ${x['variety'] ?? '품종 미지정'}'),
+                              ))
+                          .toList(),
+                      onChanged: choose,
+                    ),
+                  )
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(selected, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+                      if (variety.isNotEmpty) Text(variety, style: const TextStyle(fontSize: 11, color: Color(0xFF667067))),
+                    ],
+                  ),
           ),
-          if (orchards.isEmpty && variety.isNotEmpty)
-            Flexible(child: Text(variety, overflow: TextOverflow.ellipsis)),
           IconButton(
             tooltip: '과수원·품종 관리',
             onPressed: openManager,
@@ -254,23 +271,21 @@ class _AnnualHomeState extends State<AnnualHome> {
           padding: const EdgeInsets.fromLTRB(16, 7, 10, 7),
           child: Row(
             children: [
-              Icon(
-                offline ? Icons.sync_problem_rounded : Icons.hub_rounded,
-                size: 18,
-                color: offline ? const Color(0xFF9A6230) : const Color(0xFF2F6B35),
-              ),
+              Icon(offline ? Icons.sync_problem_rounded : Icons.hub_rounded, size: 18, color: offline ? const Color(0xFF9A6230) : const Color(0xFF2F6B35)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  offline
-                      ? '통합 엔진 연결 확인 필요'
-                      : '통합 엔진 · ${annual['month'] ?? '-'}월 · 우선작업 ${actions.length} · 위험 ${observations['max_risk'] ?? 0}/5 · 순이익 ${finance['profit'] ?? 0}원',
+                  !orchardReady
+                      ? '과수원 정보를 확인하는 중입니다'
+                      : offline
+                          ? '통합 엔진 연결 확인 필요'
+                          : '통합 엔진 · ${annual['month'] ?? '-'}월 · 우선작업 ${actions.length} · 위험 ${observations['max_risk'] ?? 0}/5 · 순이익 ${finance['profit'] ?? 0}원',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
                 ),
               ),
-              if (syncing)
+              if (syncing || !orchardReady)
                 const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
               else
                 const Icon(Icons.sync_rounded, size: 20),
@@ -292,10 +307,9 @@ class _AnnualHomeState extends State<AnnualHome> {
                 _integratedBar(),
                 const Divider(height: 1, color: Color(0x10000000)),
                 Expanded(
-                  child: IndexedStack(
-                    index: index,
-                    children: pages,
-                  ),
+                  child: !orchardReady || pages.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : IndexedStack(index: index, children: pages),
                 ),
               ],
             ),
