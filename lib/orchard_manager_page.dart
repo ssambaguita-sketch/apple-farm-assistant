@@ -125,6 +125,96 @@ class _OrchardManagerPageState extends State<OrchardManagerPage> {
     }
   }
 
+  Future<void> removeOrchard(Map<String, dynamic> item) async {
+    final orchardName = '${item['name']}';
+    if (items.length <= 1) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('마지막 과수원은 삭제할 수 없습니다'),
+          content: const Text('앱이 사용할 과수원이 최소 1개는 필요합니다. 다른 과수원을 먼저 추가한 뒤 삭제하세요.'),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('확인'))],
+        ),
+      );
+      return;
+    }
+
+    final confirm = TextEditingController();
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          icon: const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 34),
+          title: Text('$orchardName 삭제'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '과수원을 삭제하면 이 과수원에 연결된 구역, 작업, 예찰 기록, 경영 기록, 잡초 이력 등도 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.',
+              ),
+              const SizedBox(height: 14),
+              Text('확인을 위해 아래에 "$orchardName"을 입력하세요.', style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: confirm,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: '과수원 이름 확인'),
+                onChanged: (_) => setDialogState(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+              onPressed: confirm.text.trim() == orchardName ? () => Navigator.pop(context, true) : null,
+              icon: const Icon(Icons.delete_forever_outlined),
+              label: const Text('영구 삭제'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (approved != true) return;
+    if (mounted) setState(() => loading = true);
+
+    final result = await api.remove(
+      id: (item['id'] as num).toInt(),
+      confirmName: orchardName,
+    );
+    if (!mounted) return;
+
+    if (result['error'] != null) {
+      setState(() {
+        loading = false;
+        message = '${result['error']}';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${result['error']}')));
+      return;
+    }
+
+    final wasSelected = OrchardSelection.name == orchardName;
+    final next = result['next_orchard'] is Map
+        ? Map<String, dynamic>.from(result['next_orchard'] as Map)
+        : <String, dynamic>{};
+    if (wasSelected && next.isNotEmpty) {
+      await OrchardSelection.select(
+        '${next['name']}',
+        varietyText: '${next['variety'] ?? ''}',
+      );
+    }
+
+    await load();
+    if (!mounted) return;
+    setState(() {
+      loading = false;
+      message = '$orchardName 과수원을 삭제했습니다.${wasSelected && next.isNotEmpty ? ' 현재 과수원은 ${next['name']}으로 변경되었습니다.' : ''}';
+    });
+  }
+
   Future<void> selectItem(Map<String, dynamic> item) async {
     await OrchardSelection.select('${item['name']}', varietyText: '${item['variety'] ?? ''}');
     if (!mounted) return;
@@ -177,7 +267,24 @@ class _OrchardManagerPageState extends State<OrchardManagerPage> {
                   subtitle: Text('품종: ${item['variety'] ?? '미지정'}\n전체 ${item['tree_count'] ?? 0}주 · ${item['area_m2'] ?? 0}㎡ · ${item['growth_stage'] ?? ''}'),
                   isThreeLine: true,
                   onTap: () => selectItem(item),
-                  trailing: IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => edit(item)),
+                  trailing: SizedBox(
+                    width: 92,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        IconButton(
+                          tooltip: '수정',
+                          icon: const Icon(Icons.edit_outlined),
+                          onPressed: () => edit(item),
+                        ),
+                        IconButton(
+                          tooltip: '삭제',
+                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                          onPressed: loading ? null : () => removeOrchard(item),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
