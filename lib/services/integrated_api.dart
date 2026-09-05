@@ -58,8 +58,15 @@ class IntegratedApi {
       final uri = Uri.parse('${FarmApi.baseUrl}/api/integrated/sync').replace(queryParameters: {'orchard': orchard});
       final r = await http.post(uri).timeout(const Duration(seconds: 25));
       if (r.statusCode == 200) {
-        invalidate(orchard);
-        return Map<String, dynamic>.from(jsonDecode(r.body));
+        final data = Map<String, dynamic>.from(jsonDecode(r.body));
+        if (data['briefing'] is Map) {
+          final briefing = Map<String, dynamic>.from(data['briefing'] as Map);
+          _cache[orchard] = briefing;
+          _cacheAt[orchard] = DateTime.now();
+        } else {
+          invalidate(orchard);
+        }
+        return data;
       }
       return {'ok': false, 'message': '통합 작업 동기화 실패 (${r.statusCode})'};
     } catch (e) {
