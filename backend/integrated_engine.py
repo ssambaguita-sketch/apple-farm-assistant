@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from threading import Lock
 
-from fastapi import HTTPException
-from sqlalchemy import select, desc, func, insert
+from sqlalchemy import select, desc, insert
 
 import main
 import phenology_calendar
@@ -153,7 +152,6 @@ def _build_snapshot(orchard: str):
                 item["scheduled_at"] = f"오늘 {int(coach_hour):02d}:00 전후"
                 item["reason"] += f" · 코치 엔진 추천시간 {int(coach_hour):02d}시 반영"
 
-    # 같은 제목은 하나만 유지하고 우선순위가 높은 순으로 제한한다.
     dedup = {}
     for item in actions:
         old = dedup.get(item["title"])
@@ -213,8 +211,7 @@ def integrated_briefing(orchard: str = "A과수원", refresh: bool = False):
 def integrated_sync(orchard: str = "A과수원"):
     name = orchard.strip() or "A과수원"
     snapshot = _build_snapshot(name)
-    pending = _pending_tasks(name)
-    existing_titles = {str(x.get("title") or "") for x in pending}
+    existing_titles = {str(x.get("title") or "") for x in _pending_tasks(name)}
     created = []
 
     with main.engine.begin() as c:
@@ -235,11 +232,21 @@ def integrated_sync(orchard: str = "A과수원"):
             created.append({"id": result.inserted_primary_key[0], **action})
             existing_titles.add(title)
 
-    invalidate_integrated_cache(name)
+    # 작업 생성 이후 표시용 상태만 한 번 갱신하고 캐시에 넣어,
+    # 클라이언트가 다시 briefing을 호출하지 않아도 되게 한다.
+    if created:
+        for action in snapshot["actions"]:
+            if action["title"] in existing_titles:
+                action["already_in_tasks"] = True
+        snapshot["pending_task_count"] = int(snapshot.get("pending_task_count") or 0) + len(created)
+        snapshot["generated_at"] = main.now_iso()
+    _cache_set(name, snapshot)
+
     return {
         "ok": True,
         "orchard": name,
         "created_count": len(created),
         "created": created,
+        "briefing": snapshot,
         "message": "통합 엔진의 새 우선 작업만 중복 없이 작업 메뉴에 반영했습니다.",
     }
