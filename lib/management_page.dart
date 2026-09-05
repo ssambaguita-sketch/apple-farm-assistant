@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'finance_page.dart';
 import 'gps_settings_page.dart';
-import 'main.dart' as legacy;
+import 'server_diagnostics_page.dart';
 import 'services/orchard_selection.dart';
 
 class ManagementPage extends StatelessWidget {
@@ -52,9 +52,9 @@ class ManagementPage extends StatelessWidget {
           child: ListTile(
             leading: const CircleAvatar(child: Icon(Icons.settings_outlined)),
             title: const Text('서버 · 기능 진단', style: TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: const Text('서버 연결, KMA 상태, 작업·코치 API 전체 기능 진단'),
+            subtitle: const Text('현재 선택 과수원 기준 서버, KMA, 작업·코치 API 전체 기능 진단'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => _open(context, '설정 · 기능 진단', const legacy.MorePage()),
+            onTap: () => _open(context, '설정 · 기능 진단', const ServerDiagnosticsPage()),
           ),
         ),
         const SizedBox(height: 10),
@@ -62,7 +62,7 @@ class ManagementPage extends StatelessWidget {
           child: ListTile(
             leading: CircleAvatar(child: Icon(Icons.speed_outlined)),
             title: Text('속도 최적화 적용', style: TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text('탭 화면 상태 유지 · 중복 화면 재생성 감소 · 서버 날씨 5분 캐시'),
+            subtitle: Text('탭 화면 상태 유지 · 과수원 변경 시 관련 화면만 재생성 · 서버 날씨 5분 캐시'),
           ),
         ),
       ],
