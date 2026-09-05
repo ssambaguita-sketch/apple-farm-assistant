@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'finance_page.dart';
 import 'gps_settings_page.dart';
+import 'in_app_update_page.dart';
 import 'notification_settings_page.dart';
 import 'server_diagnostics_page.dart';
 import 'services/orchard_selection.dart';
@@ -44,11 +45,21 @@ class ManagementPage extends StatelessWidget {
         Text('${OrchardSelection.name} 기준 통합 관리'),
         const SizedBox(height: 14),
         Card(
-          color: const Color(0xFFF1F8EF),
+          color: const Color(0xFFEAF5E5),
           child: ListTile(
             leading: const CircleAvatar(child: Icon(Icons.system_update_alt_rounded)),
-            title: const Text('앱 업데이트 · 공식 설치 출처', style: TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: const Text('GitHub Releases에서 최신 APK를 받습니다. 첫 설치 때만 브라우저의 “이 출처 허용” 설정이 필요할 수 있습니다.'),
+            title: const Text('앱 안에서 업데이트', style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: const Text('최신 버전 확인 → APK 자동 다운로드 → 기존 앱 위에 업데이트'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _open(context, '앱 안에서 업데이트', const InAppUpdatePage()),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Card(
+          child: ListTile(
+            leading: const CircleAvatar(child: Icon(Icons.open_in_new_rounded)),
+            title: const Text('공식 설치 출처', style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: const Text('GitHub Releases 공식 배포 페이지를 직접 엽니다.'),
             trailing: const Icon(Icons.open_in_new_rounded),
             onTap: () => _openOfficialRelease(context),
           ),
