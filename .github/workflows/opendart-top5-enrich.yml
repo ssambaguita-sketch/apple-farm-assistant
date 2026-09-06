@@ -1,0 +1,29 @@
+name: OpenDART Top5 Enrich
+on:
+  push:
+    branches: [opendart-bulk-test]
+    paths:
+      - 'tools/opendart_top5_enrich.py'
+      - '.github/workflows/opendart-top5-enrich.yml'
+  workflow_dispatch:
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run enrichment
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+        run: python tools/opendart_top5_enrich.py
+      - name: Upload enrichment artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opendart-top5-enriched
+          path: artifacts_top5/
+          if-no-files-found: warn
+          retention-days: 7
