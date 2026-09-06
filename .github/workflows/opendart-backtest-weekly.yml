@@ -56,6 +56,8 @@ jobs:
             echo "No backtest summary changes"
           else
             git commit -m "Update OpenDART five-year backtest calibration"
+            git fetch origin main
+            git rebase origin/main
             git push origin HEAD:main
           fi
       - name: Upload full backtest artifact
