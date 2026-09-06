@@ -19,25 +19,25 @@ KEY = os.environ.get("OPENDART_API_KEY", "").strip()
 OUT = Path(os.environ.get("INVESTMENT_OUTDIR", "investment_daily"))
 WATCHLIST = Path(os.environ.get("INVESTMENT_WATCHLIST", "config/investment_watchlist.csv"))
 RELEVANT = ("유상증자", "전환사채", "신주인수권부사채", "교환사채", "감자", "자기주식", "합병", "분할", "타법인주식", "소송", "부도", "회생절차")
+MIN_LIQUIDITY_KRW = 1_000_000_000
 
 
 def http_json(endpoint, params, timeout=25):
     params = dict(params)
     params["crtfc_key"] = KEY
     url = f"{DART}/{endpoint}?{urlencode(params)}"
-    req = Request(url, headers={"User-Agent": "OpenDARTInvestmentMonitor/1.0"})
+    req = Request(url, headers={"User-Agent": "OpenDARTInvestmentMonitor/1.1"})
     with urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8"))
 
 
 def corp_map():
     url = f"{DART}/corpCode.xml?{urlencode({'crtfc_key': KEY})}"
-    req = Request(url, headers={"User-Agent": "OpenDARTInvestmentMonitor/1.0"})
+    req = Request(url, headers={"User-Agent": "OpenDARTInvestmentMonitor/1.1"})
     with urlopen(req, timeout=30) as r:
         raw = r.read()
     zf = zipfile.ZipFile(BytesIO(raw))
-    xml_name = zf.namelist()[0]
-    root = ET.fromstring(zf.read(xml_name))
+    root = ET.fromstring(zf.read(zf.namelist()[0]))
     by_stock = {}
     for node in root.findall("list"):
         stock = (node.findtext("stock_code") or "").strip()
@@ -131,9 +131,16 @@ def classify(row):
 
     if row.get("price_status") != "OK":
         return 0, 100, "AVOID", "가격 데이터 없음"
-    if liq is not None and liq < 1_000_000_000:
-        risk += 50
+
+    # Hard execution filter: illiquid names are not tradable in this strategy.
+    if liq is None or liq < MIN_LIQUIDITY_KRW:
         reasons.append("20일 평균 거래대금 10억원 미만")
+        if corr >= 5:
+            reasons.append(f"정정 {corr}회")
+        if filings >= 8:
+            reasons.append(f"21일 내 관련공시 {filings}건")
+        return 0, 100, "AVOID", "; ".join(reasons)
+
     if corr >= 5:
         risk += 25
         reasons.append(f"정정 {corr}회")
@@ -153,7 +160,7 @@ def classify(row):
     opp = min(100, opp)
     if risk >= 70:
         state = "AVOID"
-    elif liq is not None and liq >= 1_000_000_000 and opp >= 35 and corr < 5:
+    elif opp >= 35 and corr < 5:
         state = "WATCH"
     else:
         state = "RESEARCH"
@@ -171,8 +178,7 @@ def main():
 
     for _, w in watch.iterrows():
         ticker = str(w["ticker"]).zfill(6)
-        suffix = str(w["yahoo_suffix"])
-        symbol = ticker + suffix
+        symbol = ticker + str(w["yahoo_suffix"])
         benchmark = str(w["benchmark"])
         info = cmap.get(ticker, {})
         corp_code = info.get("corp_code")
