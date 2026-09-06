@@ -24,6 +24,21 @@ def run():
     import start
     import runtime_contract
 
+    # The external runtime output must have exactly one route and that route must
+    # terminate at the strict producer+validator choke point.
+    health_routes = [
+        route for route in start.app.routes if getattr(route, "path", None) == "/health"
+    ]
+    assert len(health_routes) == 1
+    health_route = health_routes[0]
+    assert health_route.endpoint is runtime_contract.first_runtime_output
+    assert health_route.dependant.call is runtime_contract.first_runtime_output
+
+    # Producer output is validated unchanged: no migration/default/repair layer.
+    raw_produced = runtime_contract.build_first_runtime_output()
+    validated_produced = runtime_contract.validate_first_runtime_output(raw_produced)
+    assert validated_produced == raw_produced
+
     with TestClient(start.app) as client:
         response = client.get("/health")
 
@@ -88,12 +103,18 @@ def run():
     for payload in cases:
         _expect_rejected(runtime_contract.validate_first_runtime_output, payload)
 
+    # Regression: stale raw producer data is rejected rather than repaired.
+    stale_raw = dict(raw_produced)
+    stale_raw["version"] = "4.2.0"
+    _expect_rejected(runtime_contract.validate_first_runtime_output, stale_raw)
+
     print("FIRST_RUNTIME_OUTPUT_STRICT_OK")
     print(
         {
             "version": first_runtime_output["version"],
             "database": first_runtime_output["database"],
-            "negative_cases_rejected": len(cases),
+            "negative_cases_rejected": len(cases) + 1,
+            "single_choke_point": True,
             "keys": sorted(first_runtime_output),
         }
     )
