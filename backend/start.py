@@ -18,3 +18,5 @@ import integrated_engine  # links annual, diagnosis, weed, foliar, finance, coac
 
 app = base_app.app
 app.version = "6.0.0"
+
+import runtime_contract  # installs strict fail-closed /health runtime output validation
