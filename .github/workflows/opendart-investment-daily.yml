@@ -66,6 +66,8 @@ jobs:
           V2_LOOKBACK_DAYS: 365
         run: python tools/investment_engine_v2.py
       - name: Run advanced signal layer
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
         run: python tools/advanced_signal_layer.py
       - name: Track paper performance
         run: python tools/paper_performance_tracker.py
