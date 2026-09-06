@@ -48,29 +48,52 @@ def validate_first_runtime_output(payload: object) -> dict:
     return validated.model_dump()
 
 
+def build_first_runtime_output() -> dict:
+    """Produce the runtime payload in canonical form before any validation.
+
+    This is deliberately the only producer used by the external /health route.
+    No defaults, migrations, coercion, or field repair happen between production
+    and strict validation.
+    """
+
+    database = "postgresql" if main.DATABASE_URL.startswith("postgresql") else "sqlite"
+    try:
+        with main.engine.connect() as connection:
+            connection.execute(
+                main.select(main.func.count()).select_from(main.orchards)
+            ).scalar_one()
+        database_ok = True
+    except Exception:
+        database_ok = False
+
+    return {
+        "ok": True,
+        "version": main.app.version,
+        "time": main.now_iso(),
+        "database": database,
+        "database_ok": database_ok,
+        "kma_configured": bool(main.KMA_SERVICE_KEY),
+    }
+
+
+def first_runtime_output() -> dict:
+    """Single choke point: raw producer output is validated unchanged."""
+
+    payload = build_first_runtime_output()
+    return validate_first_runtime_output(payload)
+
+
 def _install_strict_health_contract() -> None:
-    route = next(
-        (r for r in main.app.routes if getattr(r, "path", None) == "/health"),
-        None,
-    )
-    if route is None:
-        raise RuntimeError("/health route is required for runtime contract validation")
+    routes = [r for r in main.app.routes if getattr(r, "path", None) == "/health"]
+    if len(routes) != 1:
+        raise RuntimeError(
+            f"exactly one /health route is required, found {len(routes)}"
+        )
 
-    original_health = route.endpoint
-
-    def strict_health():
-        payload = original_health()
-        if not isinstance(payload, dict):
-            raise RuntimeError("/health must return a JSON object")
-
-        # main.py historically hard-coded an older version. The runtime contract
-        # uses the actual FastAPI application version set by start.py.
-        candidate = {**payload, "version": main.app.version}
-        return validate_first_runtime_output(candidate)
-
-    route.endpoint = strict_health
+    route = routes[0]
+    route.endpoint = first_runtime_output
     if getattr(route, "dependant", None) is not None:
-        route.dependant.call = strict_health
+        route.dependant.call = first_runtime_output
 
 
 _install_strict_health_contract()
