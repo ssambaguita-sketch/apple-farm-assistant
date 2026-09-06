@@ -6,8 +6,10 @@ on:
     paths:
       - 'tools/opendart_auto_discovery.py'
       - 'tools/daily_investment_monitor.py'
+      - 'tools/enrich_event_terms.py'
       - 'tools/publish_dashboard_data.py'
       - 'public/index.html'
+      - 'public/app.js'
       - 'config/investment_watchlist.csv'
       - '.github/workflows/opendart-investment-daily.yml'
   workflow_dispatch:
@@ -21,7 +23,7 @@ permissions:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -48,6 +50,11 @@ jobs:
           OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
           INVESTMENT_WATCHLIST: investment_daily/generated_watchlist.csv
         run: python tools/daily_investment_monitor.py
+      - name: Enrich financing terms
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+          DETAIL_LOOKBACK_DAYS: 120
+        run: python tools/enrich_event_terms.py
       - name: Build dashboard data
         run: python tools/publish_dashboard_data.py
       - name: Commit latest dashboard data on main
