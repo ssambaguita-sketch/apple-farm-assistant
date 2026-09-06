@@ -8,7 +8,9 @@ on:
       - 'tools/daily_investment_monitor.py'
       - 'tools/enrich_event_terms.py'
       - 'tools/investment_engine_v2.py'
+      - 'tools/advanced_signal_layer.py'
       - 'tools/publish_dashboard_data.py'
+      - 'investment_daily/learned_weights.json'
       - 'config/investment_watchlist.csv'
       - '.github/workflows/opendart-investment-daily.yml'
   workflow_dispatch:
@@ -25,7 +27,7 @@ permissions:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -62,14 +64,16 @@ jobs:
           OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
           V2_LOOKBACK_DAYS: 365
         run: python tools/investment_engine_v2.py
+      - name: Run advanced signal layer
+        run: python tools/advanced_signal_layer.py
       - name: Build dashboard data
         run: python tools/publish_dashboard_data.py
-      - name: Commit latest dashboard data on main
+      - name: Commit latest dashboard and paper portfolio
         if: github.ref == 'refs/heads/main'
         run: |
           git config user.name "opendart-dashboard-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/data.json public/filings.json
+          git add public/data.json public/filings.json research/paper_signals.csv
           if git diff --cached --quiet; then
             echo "No dashboard data changes"
           else
@@ -83,6 +87,7 @@ jobs:
           name: opendart-investment-daily-${{ github.run_number }}
           path: |
             investment_daily/
+            research/paper_signals.csv
             public/data.json
             public/filings.json
           if-no-files-found: warn
