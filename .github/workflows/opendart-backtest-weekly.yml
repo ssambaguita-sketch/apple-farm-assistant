@@ -28,11 +28,17 @@ jobs:
           OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
         run: |
           test -n "$OPENDART_API_KEY" || (echo "OPENDART_API_KEY secret is missing" && exit 2)
-      - name: Ensure watchlist exists
-        run: |
-          if [ ! -f investment_daily/generated_watchlist.csv ]; then
-            cp config/investment_watchlist.csv investment_daily/generated_watchlist.csv || true
-          fi
+      - name: Rebuild current discovery watchlist
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+          DISCOVERY_DAYS: 3
+          DISCOVERY_MAX: 30
+        run: python tools/opendart_auto_discovery.py
+      - name: Resolve corp codes and current market board
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+          INVESTMENT_WATCHLIST: investment_daily/generated_watchlist.csv
+        run: python tools/daily_investment_monitor.py
       - name: Run five-year event backtest
         env:
           OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
