@@ -1,0 +1,45 @@
+name: OpenDART Investment Daily
+
+on:
+  push:
+    branches: [opendart-bulk-test]
+    paths:
+      - 'tools/daily_investment_monitor.py'
+      - 'config/investment_watchlist.csv'
+      - '.github/workflows/opendart-investment-daily.yml'
+  workflow_dispatch:
+  schedule:
+    # 16:10 KST on weekdays. Scheduled workflows run from the default branch only.
+    - cron: '10 7 * * 1-5'
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install market-data dependencies
+        run: pip install --disable-pip-version-check pandas yfinance
+      - name: Validate OpenDART secret
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+        run: |
+          if [ -z "$OPENDART_API_KEY" ]; then
+            echo "OPENDART_API_KEY secret is missing"
+            exit 2
+          fi
+      - name: Run daily investment monitor
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+        run: python tools/daily_investment_monitor.py
+      - name: Upload daily decision artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opendart-investment-daily-${{ github.run_number }}
+          path: investment_daily/
+          if-no-files-found: warn
+          retention-days: 14
