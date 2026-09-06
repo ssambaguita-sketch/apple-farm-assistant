@@ -1,0 +1,62 @@
+{
+  "감자": {
+    "n": 66,
+    "avg_relative_20d_pct": 4.97,
+    "setup_adjustment": 2.48,
+    "enabled": true
+  },
+  "EB": {
+    "n": 6,
+    "avg_relative_20d_pct": 0.84,
+    "setup_adjustment": 0.0,
+    "enabled": false
+  },
+  "SPLIT": {
+    "n": 32,
+    "avg_relative_20d_pct": 33.98,
+    "setup_adjustment": 15.0,
+    "enabled": true
+  },
+  "LITIGATION": {
+    "n": 121,
+    "avg_relative_20d_pct": -4.05,
+    "setup_adjustment": -2.02,
+    "enabled": true
+  },
+  "BW": {
+    "n": 39,
+    "avg_relative_20d_pct": 2.13,
+    "setup_adjustment": 1.06,
+    "enabled": true
+  },
+  "RIGHTS": {
+    "n": 675,
+    "avg_relative_20d_pct": 1.47,
+    "setup_adjustment": 0.73,
+    "enabled": true
+  },
+  "TREASURY_BUY": {
+    "n": 38,
+    "avg_relative_20d_pct": 13.46,
+    "setup_adjustment": 6.73,
+    "enabled": true
+  },
+  "CB": {
+    "n": 430,
+    "avg_relative_20d_pct": 4.39,
+    "setup_adjustment": 2.19,
+    "enabled": true
+  },
+  "MERGER": {
+    "n": 101,
+    "avg_relative_20d_pct": -2.39,
+    "setup_adjustment": -1.2,
+    "enabled": true
+  },
+  "DISTRESS": {
+    "n": 15,
+    "avg_relative_20d_pct": -9.97,
+    "setup_adjustment": 0.0,
+    "enabled": false
+  }
+}
