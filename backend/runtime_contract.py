@@ -13,12 +13,19 @@ class FirstRuntimeOutput(BaseModel):
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    ok: Literal[True]
+    ok: StrictBool
     version: StrictStr
     time: StrictStr
     database: Literal["sqlite", "postgresql"]
     database_ok: StrictBool
     kma_configured: StrictBool
+
+    @field_validator("ok")
+    @classmethod
+    def validate_ok(cls, value: bool) -> bool:
+        if value is not True:
+            raise ValueError("ok must be exactly true")
+        return value
 
     @field_validator("time")
     @classmethod
