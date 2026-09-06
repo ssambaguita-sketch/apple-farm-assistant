@@ -2,8 +2,9 @@ name: OpenDART Investment Daily
 
 on:
   push:
-    branches: [opendart-daily-monitor-clean]
+    branches: [opendart-auto-discovery]
     paths:
+      - 'tools/opendart_auto_discovery.py'
       - 'tools/daily_investment_monitor.py'
       - 'config/investment_watchlist.csv'
       - '.github/workflows/opendart-investment-daily.yml'
@@ -15,7 +16,7 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,9 +32,16 @@ jobs:
             echo "OPENDART_API_KEY secret is missing"
             exit 2
           fi
+      - name: Discover new event candidates
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+          DISCOVERY_DAYS: 3
+          DISCOVERY_MAX: 30
+        run: python tools/opendart_auto_discovery.py
       - name: Run daily investment monitor
         env:
           OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+          INVESTMENT_WATCHLIST: investment_daily/generated_watchlist.csv
         run: python tools/daily_investment_monitor.py
       - name: Upload daily decision artifact
         if: always()
