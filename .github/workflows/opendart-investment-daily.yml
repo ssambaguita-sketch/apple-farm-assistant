@@ -2,16 +2,21 @@ name: OpenDART Investment Daily
 
 on:
   push:
-    branches: [opendart-auto-discovery]
+    branches: [opendart-dashboard-web]
     paths:
       - 'tools/opendart_auto_discovery.py'
       - 'tools/daily_investment_monitor.py'
+      - 'tools/publish_dashboard_data.py'
+      - 'public/index.html'
       - 'config/investment_watchlist.csv'
       - '.github/workflows/opendart-investment-daily.yml'
   workflow_dispatch:
   schedule:
     # 16:10 KST on weekdays. Scheduled workflows run from the default branch only.
     - cron: '10 7 * * 1-5'
+
+permissions:
+  contents: write
 
 jobs:
   monitor:
@@ -43,11 +48,28 @@ jobs:
           OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
           INVESTMENT_WATCHLIST: investment_daily/generated_watchlist.csv
         run: python tools/daily_investment_monitor.py
+      - name: Build dashboard data
+        run: python tools/publish_dashboard_data.py
+      - name: Commit latest dashboard data on main
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "opendart-dashboard-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data.json public/filings.json
+          if git diff --cached --quiet; then
+            echo "No dashboard data changes"
+          else
+            git commit -m "Update OpenDART dashboard data"
+            git push origin HEAD:main
+          fi
       - name: Upload daily decision artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: opendart-investment-daily-${{ github.run_number }}
-          path: investment_daily/
+          path: |
+            investment_daily/
+            public/data.json
+            public/filings.json
           if-no-files-found: warn
           retention-days: 14
