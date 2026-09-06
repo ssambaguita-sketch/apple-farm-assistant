@@ -11,7 +11,6 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 
 def sanitize(value):
-    """Convert pandas/numpy NaN/NA and non-finite floats to JSON null."""
     if value is None:
         return None
     if isinstance(value, dict):
@@ -37,8 +36,7 @@ def records(path):
     if not path.exists():
         return []
     df = pd.read_csv(path, dtype={'ticker': str})
-    raw = df.to_dict(orient='records')
-    return sanitize(raw)
+    return sanitize(df.to_dict(orient='records'))
 
 
 def load_json(path):
@@ -48,27 +46,29 @@ def load_json(path):
 board = records(SRC / 'daily_decision_board.csv')
 filings = records(SRC / 'recent_relevant_filings.csv')
 watchlist = records(SRC / 'generated_watchlist.csv')
+event_chains = records(SRC / 'event_chains.csv')
+backtest_stats = records(SRC / 'backtest_stats.csv')
 summary = load_json(SRC / 'summary.json')
 discovery = load_json(SRC / 'discovery_summary.json')
+v2_summary = load_json(SRC / 'v2_summary.json')
+backtest_summary = load_json(SRC / 'backtest_summary.json')
 
 payload = sanitize({
     'generated_at_utc': datetime.now(timezone.utc).isoformat(),
     'summary': summary,
     'discovery': discovery,
+    'v2_summary': v2_summary,
+    'backtest_summary': backtest_summary,
+    'backtest_stats': backtest_stats,
+    'event_chains': event_chains[:300],
     'board': board,
     'watchlist': watchlist,
 })
 
-# allow_nan=False deliberately fails the workflow if an invalid JSON number ever slips through.
-(OUT / 'data.json').write_text(
-    json.dumps(payload, ensure_ascii=False, separators=(',', ':'), allow_nan=False),
-    encoding='utf-8',
-)
-(OUT / 'filings.json').write_text(
-    json.dumps({'filings': filings}, ensure_ascii=False, separators=(',', ':'), allow_nan=False),
-    encoding='utf-8',
-)
+(OUT / 'data.json').write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':'), allow_nan=False), encoding='utf-8')
+(OUT / 'filings.json').write_text(json.dumps({'filings': filings}, ensure_ascii=False, separators=(',', ':'), allow_nan=False), encoding='utf-8')
 print(json.dumps({
     'board': len(board), 'filings': len(filings), 'watchlist': len(watchlist),
-    'auto_discovered': discovery.get('auto_discovered'),
+    'event_chains': len(event_chains), 'backtest_groups': len(backtest_stats),
+    'auto_discovered': discovery.get('auto_discovered'), 'v2': v2_summary,
 }, ensure_ascii=False, allow_nan=False))
