@@ -83,6 +83,8 @@ jobs:
             echo "No dashboard data changes"
           else
             git commit -m "Update OpenDART dashboard data"
+            git fetch origin main
+            git rebase origin/main
             git push origin HEAD:main
           fi
       - name: Upload daily decision artifact
