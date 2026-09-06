@@ -1,6 +1,12 @@
 name: OpenDART Event Backtest Weekly
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/opendart-backtest-weekly.yml'
+      - 'tools/backtest_event_engine.py'
+      - 'tools/calibrate_event_weights.py'
   workflow_dispatch:
   schedule:
     - cron: '40 8 * * 6'
