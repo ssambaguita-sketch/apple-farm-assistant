@@ -15,18 +15,26 @@ def records(path):
     df = df.where(pd.notna(df), None)
     return df.to_dict(orient='records')
 
+
+def load_json(path):
+    return json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+
 board = records(SRC / 'daily_decision_board.csv')
 filings = records(SRC / 'recent_relevant_filings.csv')
 watchlist = records(SRC / 'generated_watchlist.csv')
-summary_path = SRC / 'summary.json'
-summary = json.loads(summary_path.read_text(encoding='utf-8')) if summary_path.exists() else {}
+summary = load_json(SRC / 'summary.json')
+discovery = load_json(SRC / 'discovery_summary.json')
 
 payload = {
     'generated_at_utc': datetime.now(timezone.utc).isoformat(),
     'summary': summary,
+    'discovery': discovery,
     'board': board,
     'watchlist': watchlist,
 }
 (OUT / 'data.json').write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
 (OUT / 'filings.json').write_text(json.dumps({'filings': filings}, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
-print(json.dumps({'board': len(board), 'filings': len(filings), 'watchlist': len(watchlist)}, ensure_ascii=False))
+print(json.dumps({
+    'board': len(board), 'filings': len(filings), 'watchlist': len(watchlist),
+    'auto_discovered': discovery.get('auto_discovered'),
+}, ensure_ascii=False))
