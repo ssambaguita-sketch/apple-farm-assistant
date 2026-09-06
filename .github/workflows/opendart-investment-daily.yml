@@ -2,7 +2,7 @@ name: OpenDART Investment Daily
 
 on:
   push:
-    branches: [opendart-dashboard-web]
+    branches: [main]
     paths:
       - 'tools/opendart_auto_discovery.py'
       - 'tools/daily_investment_monitor.py'
