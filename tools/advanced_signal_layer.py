@@ -27,11 +27,29 @@ def num(v):
         return None
 
 
+def clean_reason_text(v):
+    s = str(v or '').strip()
+    if s.lower() in {'nan', 'none', 'null'}:
+        return ''
+    parts = []
+    for x in s.split(';'):
+        x = x.strip()
+        if x and x.lower() not in {'nan', 'none', 'null'}:
+            parts.append(x)
+    return '; '.join(dict.fromkeys(parts))
+
+
+def max_dilution(row):
+    vals = [num(row.get('rights_post_dilution_pct')), num(row.get('cb_potential_dilution_pct'))]
+    vals = [x for x in vals if x is not None]
+    return max(vals) if vals else None
+
+
 def dart_company(corp_code, timeout=20):
     if not KEY:
         return {}
     q = urlencode({'crtfc_key': KEY, 'corp_code': str(corp_code).split('.')[0].zfill(8)})
-    req = Request(f'{DART}/company.json?{q}', headers={'User-Agent': 'OpenDARTAdvancedLayer/2.1'})
+    req = Request(f'{DART}/company.json?{q}', headers={'User-Agent': 'OpenDARTAdvancedLayer/2.2'})
     try:
         with urlopen(req, timeout=timeout) as r:
             d = json.loads(r.read().decode('utf-8'))
@@ -190,7 +208,7 @@ def main():
     symbols=[str(x or '') for x in df.get('symbol',pd.Series(dtype=str)).tolist()]
     prices=batch_prices(symbols)
     industry_cache={}
-    micro=[]; industries=[]; industry_names=[]
+    micro=[]; industries=[]
     for _,r in df.iterrows():
         symbol=str(r.get('symbol') or '')
         micro.append(microstructure(prices.get(symbol)))
@@ -199,17 +217,14 @@ def main():
             industry_cache[corp]=dart_company(corp)
         info=industry_cache[corp]
         industries.append(str(info.get('induty_code') or 'UNKNOWN'))
-        industry_names.append(str(info.get('corp_name') or ''))
     mdf=pd.DataFrame(micro,index=df.index)
     for c in mdf.columns: df[c]=mdf[c]
     df['industry_code']=industries
-    # Official OpenDART industry code is the peer key. Exchange suffix is appended to avoid cross-market mixing.
     suffix=df.get('symbol',pd.Series('',index=df.index)).astype(str).str.extract(r'(\.KS|\.KQ)$',expand=False).fillna('')
     df['peer_group_proxy']=df['industry_code'].astype(str)+'|'+suffix
     ret=pd.to_numeric(df.get('return_5d_pct'),errors='coerce'); df['_ret5']=ret
     counts=df.groupby('peer_group_proxy')['peer_group_proxy'].transform('size')
     med=df.groupby('peer_group_proxy')['_ret5'].transform('median')
-    # Require at least two names in the current candidate universe; otherwise no peer-relative score.
     df['sector_relative_5d_pct']=((df['_ret5']-med).where(counts>=2)).round(2)
     df['sector_proxy']=df['industry_code']
     df.drop(columns=['_ret5'],inplace=True)
@@ -221,21 +236,28 @@ def main():
         am=num(df.at[i,'atr_move_1d']) if 'atr_move_1d' in df else None
         rec=num(df.at[i,'close_recovery_pct']) if 'close_recovery_pct' in df else None
         sr=num(df.at[i,'sector_relative_5d_pct'])
+        dilution=max_dilution(row)
         if vr is not None and vr>=3: setup+=5; notes.append(f'거래량 {vr:.1f}배')
         if am is not None and am<=-2: setup+=7; notes.append(f'ATR 대비 {am:.1f}σ 하락')
         if rec is not None and rec>=70 and am is not None and am<0: setup+=4; notes.append('장중 저점 회복')
         if sr is not None and sr<=-8: setup+=5; notes.append(f'OpenDART 동종업종 대비 {sr:.1f}%p')
         setup=max(0,min(100,setup)); risk=max(0,min(100,risk)); conf=num(row.get('confidence_score')) or 0
         state=str(row.get('state') or 'RESEARCH'); liq=num(row.get('avg_trading_value_20d_krw')) or 0
-        if fam=='DISTRESS' or risk>=70 or liq<MIN_LIQ or row.get('price_status')!='OK': state='AVOID'
-        elif state!='PAPER_BUY': state='WATCH' if setup>=25 and conf>=65 and risk<=50 else 'RESEARCH'
+        hard_dilution = dilution is not None and dilution >= 30
+        if hard_dilution:
+            state='AVOID'; risk=max(risk,90); notes.append(f'하드필터: 최대 희석 {dilution:.1f}%')
+        elif fam=='DISTRESS' or risk>=70 or liq<MIN_LIQ or row.get('price_status')!='OK':
+            state='AVOID'
+        elif state!='PAPER_BUY':
+            state='WATCH' if setup>=25 and conf>=65 and risk<=50 else 'RESEARCH'
         df.at[i,'market_setup_score']=round(setup,1); df.at[i,'opportunity_score']=round(setup,1); df.at[i,'risk_score']=round(risk,1); df.at[i,'state']=state
-        base=str(row.get('reasons') or '').strip(); extra='; '.join(notes); df.at[i,'reasons']='; '.join(x for x in [base,extra] if x)
+        base=clean_reason_text(row.get('reasons')); extra=clean_reason_text('; '.join(notes)); df.at[i,'reasons']='; '.join(x for x in [base,extra] if x)
     rank={'PAPER_BUY':0,'WATCH':1,'RESEARCH':2,'AVOID':3}; df['_rank']=df['state'].map(rank).fillna(9)
     df=df.sort_values(['_rank','confidence_score','market_setup_score'],ascending=[True,False,False]).drop(columns=['_rank'])
     df.to_csv(BOARD,index=False,encoding='utf-8-sig'); paper=update_paper_history(df)
     known=int((df.industry_code!='UNKNOWN').sum())
-    summary={'rows':len(df),'paper_buy':int((df.state=='PAPER_BUY').sum()),'watch':int((df.state=='WATCH').sum()),'research':int((df.state=='RESEARCH').sum()),'avoid':int((df.state=='AVOID').sum()),'industry_code_known':known,'peer_groups_with_2plus':int((counts>=2).sum()),'paper_portfolio':paper}
+    peer_group_count=int(df.loc[counts>=2,'peer_group_proxy'].nunique()) if len(df) else 0
+    summary={'rows':len(df),'paper_buy':int((df.state=='PAPER_BUY').sum()),'watch':int((df.state=='WATCH').sum()),'research':int((df.state=='RESEARCH').sum()),'avoid':int((df.state=='AVOID').sum()),'industry_code_known':known,'peer_groups_with_2plus':peer_group_count,'paper_portfolio':paper}
     (OUT/'advanced_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps(summary,ensure_ascii=False))
 
