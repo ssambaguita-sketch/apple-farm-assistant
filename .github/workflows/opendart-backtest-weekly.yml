@@ -1,0 +1,63 @@
+name: OpenDART Event Backtest Weekly
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '40 8 * * 6'
+
+concurrency:
+  group: opendart-event-backtest
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: pip install --disable-pip-version-check pandas yfinance
+      - name: Validate OpenDART secret
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+        run: |
+          test -n "$OPENDART_API_KEY" || (echo "OPENDART_API_KEY secret is missing" && exit 2)
+      - name: Ensure watchlist exists
+        run: |
+          if [ ! -f investment_daily/generated_watchlist.csv ]; then
+            cp config/investment_watchlist.csv investment_daily/generated_watchlist.csv || true
+          fi
+      - name: Run five-year event backtest
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+          BACKTEST_YEARS: 5
+          INVESTMENT_WATCHLIST: investment_daily/generated_watchlist.csv
+        run: python tools/backtest_event_engine.py
+      - name: Commit backtest summaries
+        run: |
+          git config user.name "opendart-backtest-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add investment_daily/backtest_stats.csv investment_daily/backtest_summary.json || true
+          if git diff --cached --quiet; then
+            echo "No backtest summary changes"
+          else
+            git commit -m "Update OpenDART five-year backtest summary"
+            git push origin HEAD:main
+          fi
+      - name: Upload full backtest artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opendart-backtest-${{ github.run_number }}
+          path: |
+            investment_daily/event_backtest_5y.csv
+            investment_daily/backtest_stats.csv
+            investment_daily/backtest_summary.json
+          if-no-files-found: warn
+          retention-days: 30
