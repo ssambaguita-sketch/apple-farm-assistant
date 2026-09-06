@@ -8,14 +8,16 @@ on:
       - 'tools/daily_investment_monitor.py'
       - 'tools/enrich_event_terms.py'
       - 'tools/publish_dashboard_data.py'
-      - 'public/index.html'
-      - 'public/app.js'
       - 'config/investment_watchlist.csv'
       - '.github/workflows/opendart-investment-daily.yml'
   workflow_dispatch:
   schedule:
     # 16:10 KST on weekdays. Scheduled workflows run from the default branch only.
     - cron: '10 7 * * 1-5'
+
+concurrency:
+  group: opendart-investment-daily
+  cancel-in-progress: true
 
 permissions:
   contents: write
