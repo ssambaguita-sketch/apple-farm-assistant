@@ -48,11 +48,13 @@ watchlist = records(SRC / 'generated_watchlist.csv')
 event_chains = records(SRC / 'event_chains.csv')
 backtest_stats = records(SRC / 'backtest_stats.csv')
 paper_portfolio = records(SRC / 'paper_portfolio.csv')
+paper_performance = records(SRC / 'paper_portfolio_performance.csv')
 summary = load_json(SRC / 'summary.json')
 discovery = load_json(SRC / 'discovery_summary.json')
 v2_summary = load_json(SRC / 'v2_summary.json')
 advanced_summary = load_json(SRC / 'advanced_summary.json')
 paper_summary = load_json(SRC / 'paper_portfolio_summary.json')
+paper_performance_summary = load_json(SRC / 'paper_performance_summary.json')
 backtest_summary = load_json(SRC / 'backtest_summary.json')
 learned_weights = load_json(SRC / 'learned_weights.json')
 
@@ -63,7 +65,9 @@ payload = sanitize({
     'v2_summary': v2_summary,
     'advanced_summary': advanced_summary,
     'paper_portfolio_summary': paper_summary,
+    'paper_performance_summary': paper_performance_summary,
     'paper_portfolio': paper_portfolio[-200:],
+    'paper_performance': paper_performance[-200:],
     'backtest_summary': backtest_summary,
     'backtest_stats': backtest_stats,
     'learned_weights': learned_weights,
@@ -77,6 +81,6 @@ payload = sanitize({
 print(json.dumps({
     'board': len(board), 'filings': len(filings), 'watchlist': len(watchlist),
     'event_chains': len(event_chains), 'backtest_groups': len(backtest_stats),
-    'paper_signals': len(paper_portfolio), 'auto_discovered': discovery.get('auto_discovered'),
-    'v2': v2_summary, 'advanced': advanced_summary,
+    'paper_signals': len(paper_portfolio), 'paper_performance_rows': len(paper_performance),
+    'auto_discovered': discovery.get('auto_discovered'), 'v2': v2_summary, 'advanced': advanced_summary,
 }, ensure_ascii=False, allow_nan=False))
