@@ -11,9 +11,10 @@ from urllib.request import Request, urlopen
 BASE = "https://opendart.fss.or.kr/api/list.json"
 KEY = os.environ.get("OPENDART_API_KEY", "").strip()
 CHUNK_INDEX = int(os.environ.get("OPENDART_CHUNK_INDEX", "0"))
-WINDOW_DAYS = int(os.environ.get("OPENDART_WINDOW_DAYS", "90"))
-REQUEST_TIMEOUT = int(os.environ.get("OPENDART_REQUEST_TIMEOUT", "20"))
-MAX_RETRIES = int(os.environ.get("OPENDART_MAX_RETRIES", "4"))
+CHUNK_DAYS = int(os.environ.get("OPENDART_CHUNK_DAYS", "90"))
+WINDOW_DAYS = int(os.environ.get("OPENDART_WINDOW_DAYS", str(CHUNK_DAYS)))
+REQUEST_TIMEOUT = int(os.environ.get("OPENDART_REQUEST_TIMEOUT", "12"))
+MAX_RETRIES = int(os.environ.get("OPENDART_MAX_RETRIES", "2"))
 PBLNTF_TYPES = tuple(x.strip() for x in os.environ.get("OPENDART_PBLNTF_TYPES", "B,I").split(",") if x.strip())
 
 EVENTS = (
@@ -32,9 +33,7 @@ if not KEY:
 def call(params):
     params = dict(params)
     params["crtfc_key"] = KEY
-    url = BASE + "?" + urlencode(params)
-    req = Request(url, headers={"User-Agent": "OpenDARTBulkCollector/2.0"})
-
+    req = Request(BASE + "?" + urlencode(params), headers={"User-Agent": "OpenDARTBulkCollector/3.0"})
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             with urlopen(req, timeout=REQUEST_TIMEOUT) as r:
@@ -42,12 +41,12 @@ def call(params):
         except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
             if attempt >= MAX_RETRIES:
                 raise
-            delay = min(2 ** (attempt - 1), 8)
-            print(f"retry attempt={attempt}/{MAX_RETRIES} delay={delay}s error={exc!r}", flush=True)
+            delay = min(2 ** (attempt - 1), 4)
+            print(f"retry attempt={attempt}/{MAX_RETRIES} delay={delay}s error={type(exc).__name__}", flush=True)
             time.sleep(delay)
 
 
-def ranges(start, end, days=90):
+def ranges(start, end, days):
     cur = start
     while cur <= end:
         nxt = min(cur + timedelta(days=days - 1), end)
@@ -65,31 +64,29 @@ def atomic_write(path, text, encoding="utf-8"):
 def save(rows, summary):
     os.makedirs("artifacts", exist_ok=True)
     out = sorted(rows.values(), key=lambda x: (x.get("rcept_dt") or "", x.get("rcept_no") or ""), reverse=True)
-
-    jsonl = "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in out)
-    atomic_write("artifacts/korea_financial_events_bulk.jsonl", jsonl)
-
-    csv_tmp = "artifacts/korea_financial_events_bulk.csv.tmp"
+    prefix = f"chunk_{CHUNK_INDEX:02d}"
+    atomic_write(f"artifacts/{prefix}.jsonl", "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in out))
+    csv_tmp = f"artifacts/{prefix}.csv.tmp"
     with open(csv_tmp, "w", encoding="utf-8-sig", newline="") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
         w.writeheader()
         w.writerows(out)
-    os.replace(csv_tmp, "artifacts/korea_financial_events_bulk.csv")
-
+    os.replace(csv_tmp, f"artifacts/{prefix}.csv")
     summary = dict(summary)
     summary["rows"] = len(out)
-    atomic_write("artifacts/summary.json", json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
+    atomic_write(f"artifacts/{prefix}_summary.json", json.dumps(summary, ensure_ascii=False, indent=2) + "\n")
 
 
 def main():
     today = date.today()
-    chunk_end = today - timedelta(days=365 * CHUNK_INDEX)
-    chunk_start = chunk_end - timedelta(days=364)
+    chunk_end = today - timedelta(days=CHUNK_DAYS * CHUNK_INDEX)
+    chunk_start = chunk_end - timedelta(days=CHUNK_DAYS - 1)
     rows = {}
     calls = 0
     summary = {
         "status": "running",
         "chunk_index": CHUNK_INDEX,
+        "chunk_days": CHUNK_DAYS,
         "period_start": str(chunk_start),
         "period_end": str(chunk_end),
         "pblntf_types": list(PBLNTF_TYPES),
@@ -114,13 +111,12 @@ def main():
                     calls += 1
                     status = data.get("status")
                     if status == "013":
-                        print(f"progress type={pblntf_ty} window={bgn}..{end} page={page} empty rows={len(rows)} calls={calls}", flush=True)
+                        print(f"progress chunk={CHUNK_INDEX} type={pblntf_ty} page={page} empty rows={len(rows)} calls={calls}", flush=True)
                         break
                     if status != "000":
                         raise RuntimeError(f"OpenDART status={status} message={data.get('message')}")
 
-                    items = data.get("list") or []
-                    for item in items:
+                    for item in data.get("list") or []:
                         title = item.get("report_nm", "")
                         if any(ev in title for ev in EVENTS):
                             rcept_no = item.get("rcept_no")
@@ -138,23 +134,19 @@ def main():
                         "current_total_page": total_page,
                     })
                     save(rows, summary)
-                    print(
-                        f"progress type={pblntf_ty} window={bgn}..{end} page={page}/{total_page} rows={len(rows)} calls={calls}",
-                        flush=True,
-                    )
-
+                    print(f"progress chunk={CHUNK_INDEX} type={pblntf_ty} page={page}/{total_page} rows={len(rows)} calls={calls}", flush=True)
                     if page >= total_page:
                         break
                     page += 1
-                    time.sleep(0.10)
+                    time.sleep(0.08)
 
         summary.update({"status": "complete", "api_calls": calls})
         save(rows, summary)
         print(json.dumps({"status": "complete", "chunk_index": CHUNK_INDEX, "rows": len(rows), "api_calls": calls}, ensure_ascii=False), flush=True)
     except Exception as exc:
-        summary.update({"status": "failed", "api_calls": calls, "error": repr(exc)})
+        summary.update({"status": "failed", "api_calls": calls, "error": f"{type(exc).__name__}: {exc}"})
         save(rows, summary)
-        print(json.dumps({"status": "failed", "chunk_index": CHUNK_INDEX, "rows": len(rows), "api_calls": calls, "error": repr(exc)}, ensure_ascii=False), file=sys.stderr, flush=True)
+        print(json.dumps({"status": "failed", "chunk_index": CHUNK_INDEX, "rows": len(rows), "api_calls": calls, "error": f"{type(exc).__name__}: {exc}"}, ensure_ascii=False), file=sys.stderr, flush=True)
         raise
 
 
