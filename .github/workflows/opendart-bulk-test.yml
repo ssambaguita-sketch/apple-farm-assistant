@@ -1,0 +1,39 @@
+name: OpenDART Bulk Test
+
+on:
+  push:
+    branches: [opendart-bulk-test]
+    paths:
+      - 'tools/opendart_bulk_collect.py'
+      - '.github/workflows/opendart-bulk-test.yml'
+  workflow_dispatch:
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate secret exists
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+        run: |
+          if [ -z "$OPENDART_API_KEY" ]; then
+            echo "OPENDART_API_KEY secret is missing"
+            exit 2
+          fi
+      - name: Run OpenDART collector
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+        run: python tools/opendart_bulk_collect.py
+      - name: Upload collected data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opendart-bulk-results
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 7
