@@ -45,15 +45,17 @@ jobs:
           BACKTEST_YEARS: 5
           INVESTMENT_WATCHLIST: investment_daily/generated_watchlist.csv
         run: python tools/backtest_event_engine.py
-      - name: Commit backtest summaries
+      - name: Calibrate empirical event weights
+        run: python tools/calibrate_event_weights.py
+      - name: Commit backtest summaries and calibrated weights
         run: |
           git config user.name "opendart-backtest-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add investment_daily/backtest_stats.csv investment_daily/backtest_summary.json || true
+          git add investment_daily/backtest_stats.csv investment_daily/backtest_summary.json investment_daily/learned_weights.json || true
           if git diff --cached --quiet; then
             echo "No backtest summary changes"
           else
-            git commit -m "Update OpenDART five-year backtest summary"
+            git commit -m "Update OpenDART five-year backtest calibration"
             git push origin HEAD:main
           fi
       - name: Upload full backtest artifact
@@ -65,5 +67,6 @@ jobs:
             investment_daily/event_backtest_5y.csv
             investment_daily/backtest_stats.csv
             investment_daily/backtest_summary.json
+            investment_daily/learned_weights.json
           if-no-files-found: warn
           retention-days: 30
