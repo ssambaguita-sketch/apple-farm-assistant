@@ -6,6 +6,7 @@ on:
       - 'tools/opendart_top5_enrich.py'
       - '.github/workflows/opendart-top5-enrich.yml'
   workflow_dispatch:
+
 jobs:
   enrich:
     runs-on: ubuntu-latest
