@@ -4,14 +4,25 @@ const safe = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<'
 const won = (v) => { const n=Number(v); if(!Number.isFinite(n)) return '-'; if(n>=1e12) return (n/1e12).toFixed(1)+'조'; if(n>=1e8) return (n/1e8).toFixed(1)+'억'; return Math.round(n).toLocaleString('ko-KR'); };
 const pct = (v) => { const n=Number(v); if(!Number.isFinite(n)) return '-'; return (n>0?'+':'')+n.toFixed(1)+'%'; };
 function dartUrl(no){ return no ? 'https://dart.fss.or.kr/dsaf001/main.do?rcpNo=' + encodeURIComponent(no) : ''; }
+async function fetchJsonCompat(url){
+  const r = await fetch(url, {cache:'no-store'});
+  if(!r.ok) throw new Error(url.split('?')[0]+' HTTP '+r.status);
+  let text = await r.text();
+  // Legacy Python json.dumps files may contain non-standard NaN/Infinity tokens.
+  text = text.replace(/:\s*NaN(?=\s*[,}\]])/g, ':null')
+             .replace(/:\s*Infinity(?=\s*[,}\]])/g, ':null')
+             .replace(/:\s*-Infinity(?=\s*[,}\]])/g, ':null');
+  try { return JSON.parse(text); }
+  catch(e) { throw new Error(url.split('?')[0]+' JSON 파싱 실패: '+e.message); }
+}
 async function load(){
   $('loadState').textContent='데이터 불러오는 중...';
   try {
-    const [dr,fr] = await Promise.all([fetch('./data.json?ts='+Date.now(), {cache:'no-store'}), fetch('./filings.json?ts='+Date.now(), {cache:'no-store'})]);
-    if(!dr.ok) throw new Error('data.json HTTP '+dr.status);
-    if(!fr.ok) throw new Error('filings.json HTTP '+fr.status);
-    meta = await dr.json();
-    const f = await fr.json();
+    const [data,f] = await Promise.all([
+      fetchJsonCompat('./data.json?ts='+Date.now()),
+      fetchJsonCompat('./filings.json?ts='+Date.now())
+    ]);
+    meta = data;
     board = Array.isArray(meta.board) ? meta.board : [];
     filings = Array.isArray(f.filings) ? f.filings : [];
     const s=meta.summary||{}, d=meta.discovery||{};
@@ -28,7 +39,7 @@ async function load(){
   } catch(e) {
     $('loadState').textContent='데이터 로드 실패: '+e.message;
     $('loadState').className='err';
-    $('body').innerHTML='<tr><td colspan="12">데이터를 불러오지 못했습니다. 새로고침 후에도 계속되면 data.json 배포 상태를 확인하세요.</td></tr>';
+    $('body').innerHTML='<tr><td colspan="12">데이터를 불러오지 못했습니다. '+safe(e.message)+'</td></tr>';
   }
 }
 function filtered(){
