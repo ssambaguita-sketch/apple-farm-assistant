@@ -7,12 +7,12 @@ on:
       - 'tools/opendart_auto_discovery.py'
       - 'tools/daily_investment_monitor.py'
       - 'tools/enrich_event_terms.py'
+      - 'tools/investment_engine_v2.py'
       - 'tools/publish_dashboard_data.py'
       - 'config/investment_watchlist.csv'
       - '.github/workflows/opendart-investment-daily.yml'
   workflow_dispatch:
   schedule:
-    # 16:10 KST on weekdays. Scheduled workflows run from the default branch only.
     - cron: '10 7 * * 1-5'
 
 concurrency:
@@ -25,13 +25,13 @@ permissions:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install market-data dependencies
+      - name: Install dependencies
         run: pip install --disable-pip-version-check pandas yfinance
       - name: Validate OpenDART secret
         env:
@@ -47,16 +47,21 @@ jobs:
           DISCOVERY_DAYS: 3
           DISCOVERY_MAX: 30
         run: python tools/opendart_auto_discovery.py
-      - name: Run daily investment monitor
+      - name: Run daily market monitor
         env:
           OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
           INVESTMENT_WATCHLIST: investment_daily/generated_watchlist.csv
         run: python tools/daily_investment_monitor.py
-      - name: Enrich financing terms
+      - name: Enrich financing terms v1
         env:
           OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
           DETAIL_LOOKBACK_DAYS: 120
         run: python tools/enrich_event_terms.py
+      - name: Run investment engine v2
+        env:
+          OPENDART_API_KEY: ${{ secrets.OPENDART_API_KEY }}
+          V2_LOOKBACK_DAYS: 365
+        run: python tools/investment_engine_v2.py
       - name: Build dashboard data
         run: python tools/publish_dashboard_data.py
       - name: Commit latest dashboard data on main
