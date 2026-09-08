@@ -1,7 +1,7 @@
 name: apple_farm_assistant
 description: Final Apple Farm Assistant
 publish_to: 'none'
-version: 3.9.1+53
+version: 3.9.2+54
 environment:
   sdk: '>=3.3.0 <4.0.0'
 dependencies:
@@ -16,6 +16,6 @@ dependencies:
   flutter_local_notifications: ^19.4.2
   timezone: ^0.10.1
   package_info_plus: ^8.1.2
-  ota_update: ^6.0.0
+  ota_update: ^7.1.0
 flutter:
   uses-material-design: true
