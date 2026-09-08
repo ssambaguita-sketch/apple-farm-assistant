@@ -140,6 +140,11 @@ class _InAppUpdatePageState extends State<InAppUpdatePage> {
               status = '다운로드 완료 · Android 설치 확인창을 엽니다.';
               progress = 1;
               break;
+            case OtaStatus.INSTALLATION_DONE:
+              status = '업데이트 설치가 완료되었습니다.';
+              progress = 1;
+              updating = false;
+              break;
             case OtaStatus.ALREADY_RUNNING_ERROR:
               status = '이미 업데이트가 진행 중입니다.';
               updating = false;
