@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
-
 import 'farm_api.dart';
 import 'orchard_selection.dart';
 
@@ -49,21 +47,18 @@ class IntegratedApi {
   }
 
   Future<Map<String, dynamic>> _fetchBriefing(String orchard, {required bool refresh}) async {
-    try {
-      final uri = Uri.parse('${FarmApi.baseUrl}/api/integrated/briefing').replace(
-        queryParameters: {'orchard': orchard, 'refresh': refresh ? 'true' : 'false'},
-      );
-      final r = await http.get(uri).timeout(const Duration(seconds: 20));
-      if (r.statusCode == 200) {
-        final data = Map<String, dynamic>.from(jsonDecode(r.body));
-        _cache[orchard] = data;
-        _cacheAt[orchard] = DateTime.now();
-        return data;
-      }
-      return _offline('통합 엔진 응답 오류 (${r.statusCode})', orchard: orchard);
-    } catch (_) {
-      return _offline('통합 엔진 서버 연결에 실패했습니다.', orchard: orchard);
+    final uri = Uri.parse('${FarmApi.baseUrl}/api/integrated/briefing').replace(
+      queryParameters: {'orchard': orchard, 'refresh': refresh ? 'true' : 'false'},
+    );
+    final r = await FarmApi.getWithWakeup(uri);
+    if (r?.statusCode == 200) {
+      final data = Map<String, dynamic>.from(jsonDecode(r!.body));
+      _cache[orchard] = data;
+      _cacheAt[orchard] = DateTime.now();
+      return data;
     }
+    if (r != null) return _offline('통합 엔진 응답 오류 (${r.statusCode})', orchard: orchard);
+    return _offline('운영 서버가 응답하지 않습니다. 서버가 깨어나는 중이면 잠시 후 다시 시도하세요.', orchard: orchard);
   }
 
   Future<Map<String, dynamic>> syncTasks() async {
@@ -85,24 +80,21 @@ class IntegratedApi {
   }
 
   Future<Map<String, dynamic>> _syncTasks(String orchard) async {
-    try {
-      final uri = Uri.parse('${FarmApi.baseUrl}/api/integrated/sync').replace(queryParameters: {'orchard': orchard});
-      final r = await http.post(uri).timeout(const Duration(seconds: 20));
-      if (r.statusCode == 200) {
-        final data = Map<String, dynamic>.from(jsonDecode(r.body));
-        if (data['briefing'] is Map) {
-          final briefing = Map<String, dynamic>.from(data['briefing'] as Map);
-          _cache[orchard] = briefing;
-          _cacheAt[orchard] = DateTime.now();
-        } else {
-          invalidate(orchard);
-        }
-        return data;
+    final uri = Uri.parse('${FarmApi.baseUrl}/api/integrated/sync').replace(queryParameters: {'orchard': orchard});
+    final r = await FarmApi.postWithWakeup(uri);
+    if (r?.statusCode == 200) {
+      final data = Map<String, dynamic>.from(jsonDecode(r!.body));
+      if (data['briefing'] is Map) {
+        final briefing = Map<String, dynamic>.from(data['briefing'] as Map);
+        _cache[orchard] = briefing;
+        _cacheAt[orchard] = DateTime.now();
+      } else {
+        invalidate(orchard);
       }
-      return {'ok': false, 'message': '통합 작업 동기화 실패 (${r.statusCode})'};
-    } catch (e) {
-      return {'ok': false, 'message': '통합 작업 동기화 실패: $e'};
+      return data;
     }
+    if (r != null) return {'ok': false, 'message': '통합 작업 동기화 실패 (${r.statusCode})'};
+    return {'ok': false, 'message': '운영 서버가 응답하지 않습니다. 잠시 후 다시 시도하세요.'};
   }
 
   Map<String, dynamic> _offline(String message, {String? orchard}) => {
