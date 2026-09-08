@@ -38,27 +38,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ICON="assets/app_icon_fourth.svg"
-          test -f "$ICON"
-          if ! command -v convert >/dev/null 2>&1 && ! command -v magick >/dev/null 2>&1; then
-            sudo apt-get update -qq
-            sudo apt-get install -y -qq imagemagick
-          fi
-          render_icon() {
-            local size="$1"
-            local out="$2"
-            mkdir -p "$(dirname "$out")"
-            if command -v magick >/dev/null 2>&1; then
-              magick -background none "$ICON" -resize "${size}x${size}" "$out"
-            else
-              convert -background none "$ICON" -resize "${size}x${size}" "$out"
-            fi
-          }
-          render_icon 48  android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-          render_icon 72  android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-          render_icon 96  android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-          render_icon 144 android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-          render_icon 192 android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/app_icon_fourth.xml <<'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="512"
+              android:viewportHeight="512">
+              <path android:fillColor="#F1F4E9" android:pathData="M104,0 H408 A104,104 0,0 1,512,104 V408 A104,104 0,0 1,408,512 H104 A104,104 0,0 1,0,408 V104 A104,104 0,0 1,104,0 Z"/>
+              <path android:fillColor="#79A86C" android:pathData="M0,300 C90,255 150,270 230,300 C315,335 385,285 512,250 L512,512 L0,512 Z"/>
+              <path android:fillColor="#4F8151" android:pathData="M0,344 C92,308 178,320 260,355 C350,394 426,340 512,320 L512,512 L0,512 Z"/>
+              <path android:fillColor="#2F6538" android:pathData="M0,404 C98,370 195,384 285,418 C365,448 431,414 512,394 L512,512 L0,512 Z"/>
+              <path android:fillColor="#D92E35" android:pathData="M229,146 C204,126 165,126 132,142 C85,165 60,217 68,277 C79,360 137,405 220,405 C290,405 339,363 347,287 C353,224 330,173 286,149 C267,139 247,137 229,146 Z"/>
+              <path android:fillColor="#5E3726" android:pathData="M201,143 C205,105 222,76 243,58 L255,70 C236,88 222,111 216,145 Z"/>
+              <path android:fillColor="#377D39" android:pathData="M247,74 C291,43 337,46 368,61 C342,98 304,118 253,111 Z"/>
+              <path android:fillColor="#FF9A93" android:fillAlpha="0.72" android:pathData="M105,190 C119,163 138,148 159,139 L166,153 C148,161 132,175 119,198 Z"/>
+              <path android:fillColor="#FBFBEF" android:pathData="M292,258 H417 Q445,258 445,286 V380 Q445,408 417,408 H292 Q264,408 264,380 V286 Q264,258 292,258 Z"/>
+              <path android:fillColor="#235C32" android:pathData="M292,258 H417 Q445,258 445,286 V306 H264 V286 Q264,258 292,258 Z"/>
+              <path android:fillColor="#FBFBEF" android:pathData="M304,240 H320 Q328,240 328,248 V282 H296 V248 Q296,240 304,240 Z"/>
+              <path android:fillColor="#FBFBEF" android:pathData="M390,240 H406 Q414,240 414,248 V282 H382 V248 Q382,240 390,240 Z"/>
+              <path android:fillColor="#A8C49A" android:pathData="M300,328 H327 V355 H300 Z M341,328 H368 V355 H341 Z M382,328 H409 V355 H382 Z M300,367 H327 V394 H300 Z M382,367 H409 V394 H382 Z"/>
+              <path android:fillColor="#DF2D32" android:pathData="M341,367 H368 V394 H341 Z"/>
+          </vector>
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          s = p.read_text()
+          s = s.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/app_icon_fourth"')
+          s = s.replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@drawable/app_icon_fourth"')
+          p.write_text(s)
+          PY
 
       - name: Fix Flutter source
         run: |
