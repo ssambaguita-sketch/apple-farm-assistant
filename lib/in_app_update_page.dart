@@ -154,6 +154,10 @@ class _InAppUpdatePageState extends State<InAppUpdatePage> {
               status = '업데이트 실패: ${event.value ?? event.status.name}';
               updating = false;
               break;
+            case OtaStatus.CANCELED:
+              status = '업데이트가 취소되었습니다.';
+              updating = false;
+              break;
           }
         });
       },
