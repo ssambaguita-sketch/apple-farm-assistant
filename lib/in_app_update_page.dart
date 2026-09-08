@@ -156,12 +156,16 @@ class _InAppUpdatePageState extends State<InAppUpdatePage> {
             case OtaStatus.DOWNLOAD_ERROR:
             case OtaStatus.CHECKSUM_ERROR:
             case OtaStatus.INTERNAL_ERROR:
+            case OtaStatus.INSTALLATION_ERROR:
               status = '업데이트 실패: ${event.value ?? event.status.name}';
               updating = false;
               break;
             case OtaStatus.CANCELED:
               status = '업데이트가 취소되었습니다.';
               updating = false;
+              break;
+            default:
+              status = '업데이트 상태 확인 중: ${event.status.name}';
               break;
           }
         });
