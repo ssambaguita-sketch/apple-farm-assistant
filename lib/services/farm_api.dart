@@ -14,28 +14,75 @@ class FarmApi {
 
   static Future<void> initialize() async {
     final p = await SharedPreferences.getInstance();
-    final saved = (p.getString(_key) ?? _defaultBaseUrl).trim();
-    _baseUrl = saved.contains('10.0.2.2') || saved.isEmpty
-        ? _defaultBaseUrl
-        : saved.replaceAll(RegExp(r'/+$'), '');
+    final saved = (p.getString(_key) ?? _defaultBaseUrl).trim().replaceAll(RegExp(r'/+$'), '');
+    final savedUri = Uri.tryParse(saved);
+    final officialUri = Uri.parse(_defaultBaseUrl);
+    final validProduction = savedUri != null &&
+        savedUri.scheme == 'https' &&
+        savedUri.host == officialUri.host;
+
+    // Production builds always recover to the official API. This also migrates
+    // stale emulator/LAN/custom URLs left behind by older app versions.
+    _baseUrl = validProduction ? saved : _defaultBaseUrl;
+    if (_baseUrl != saved) {
+      await p.setString(_key, _baseUrl);
+    }
   }
 
   static Future<void> setBaseUrl(String value) async {
     final normalized = value.trim().replaceAll(RegExp(r'/+$'), '');
-    _baseUrl = normalized.isEmpty ? _defaultBaseUrl : normalized;
+    final uri = Uri.tryParse(normalized);
+    final official = Uri.parse(_defaultBaseUrl);
+    _baseUrl = uri != null && uri.scheme == 'https' && uri.host == official.host
+        ? normalized
+        : _defaultBaseUrl;
     final p = await SharedPreferences.getInstance();
     await p.setString(_key, _baseUrl);
+  }
+
+  static Future<http.Response?> getWithWakeup(
+    Uri uri, {
+    Duration firstTimeout = const Duration(seconds: 20),
+    Duration retryTimeout = const Duration(seconds: 60),
+  }) async {
+    try {
+      return await http.get(uri).timeout(firstTimeout);
+    } catch (_) {
+      // Render free instances can need longer than the normal UI timeout after
+      // sleeping. Give the same request one longer wake-up attempt.
+      await Future<void>.delayed(const Duration(seconds: 2));
+      try {
+        return await http.get(uri).timeout(retryTimeout);
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  static Future<http.Response?> postWithWakeup(
+    Uri uri, {
+    Map<String, String>? headers,
+    Object? body,
+    Duration firstTimeout = const Duration(seconds: 20),
+    Duration retryTimeout = const Duration(seconds: 60),
+  }) async {
+    try {
+      return await http.post(uri, headers: headers, body: body).timeout(firstTimeout);
+    } catch (_) {
+      await Future<void>.delayed(const Duration(seconds: 2));
+      try {
+        return await http.post(uri, headers: headers, body: body).timeout(retryTimeout);
+      } catch (_) {
+        return null;
+      }
+    }
   }
 
   String _selected(String fallback) => OrchardSelection.name.trim().isNotEmpty ? OrchardSelection.name : fallback;
 
   Future<bool> health() async {
-    try {
-      final r = await http.get(Uri.parse('$_baseUrl/health')).timeout(const Duration(seconds: 25));
-      return r.statusCode == 200;
-    } catch (_) {
-      return false;
-    }
+    final r = await getWithWakeup(Uri.parse('$_baseUrl/health'));
+    return r?.statusCode == 200;
   }
 
   Future<Map<String, dynamic>> diagnostics(String orchard) async {
@@ -51,23 +98,25 @@ class FarmApi {
       'messages': <String>[],
     };
     try {
-      final r = await http.get(Uri.parse('$_baseUrl/health')).timeout(const Duration(seconds: 25));
-      if (r.statusCode == 200) {
-        final j = Map<String, dynamic>.from(jsonDecode(r.body));
+      final r = await getWithWakeup(Uri.parse('$_baseUrl/health'));
+      if (r?.statusCode == 200) {
+        final j = Map<String, dynamic>.from(jsonDecode(r!.body));
         result['server'] = j['ok'] == true;
         result['database'] = j['database_ok'] == true;
         result['kma_configured'] = j['kma_configured'] == true;
         result['server_version'] = j['version'];
         result['database_type'] = j['database'];
+      } else {
+        (result['messages'] as List<String>).add('서버 상태 확인 실패');
       }
     } catch (_) {
       (result['messages'] as List<String>).add('서버 상태 확인 실패');
     }
     try {
       final u = Uri.parse('$_baseUrl/api/weather').replace(queryParameters: {'orchard': selected});
-      final r = await http.get(u).timeout(const Duration(seconds: 25));
-      if (r.statusCode == 200) {
-        final j = Map<String, dynamic>.from(jsonDecode(r.body));
+      final r = await getWithWakeup(u);
+      if (r?.statusCode == 200) {
+        final j = Map<String, dynamic>.from(jsonDecode(r!.body));
         result['weather'] = true;
         result['weather_source'] = j['weather_source'] ?? 'unknown';
         result['weather_warning'] = j['weather_warning'];
@@ -78,43 +127,34 @@ class FarmApi {
     }
     try {
       final u = Uri.parse('$_baseUrl/api/tasks').replace(queryParameters: {'orchard': selected});
-      final r = await http.get(u).timeout(const Duration(seconds: 20));
-      if (r.statusCode == 200) {
+      final r = await getWithWakeup(u);
+      if (r?.statusCode == 200) {
         result['tasks'] = true;
-        final data = jsonDecode(r.body);
+        final data = jsonDecode(r!.body);
         result['task_count'] = data is List ? data.length : 0;
       }
     } catch (_) {
       (result['messages'] as List<String>).add('작업 API 확인 실패');
     }
     try {
-      final r = await http.get(Uri.parse('$_baseUrl/api/coach')).timeout(const Duration(seconds: 20));
-      if (r.statusCode == 200) result['coach'] = true;
+      final r = await getWithWakeup(Uri.parse('$_baseUrl/api/coach'));
+      if (r?.statusCode == 200) result['coach'] = true;
     } catch (_) {
       (result['messages'] as List<String>).add('코치 API 확인 실패');
     }
     result['orchard'] = selected;
+    result['api_base_url'] = _baseUrl;
     return result;
   }
 
-  Future<bool> saveOrchardLocation({
-    required String orchard,
-    required double lat,
-    required double lon,
-  }) async {
+  Future<bool> saveOrchardLocation({required String orchard, required double lat, required double lon}) async {
     final selected = _selected(orchard);
-    try {
-      final r = await http
-          .post(
-            Uri.parse('$_baseUrl/api/orchards/location'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'orchard': selected, 'lat': lat, 'lon': lon}),
-          )
-          .timeout(const Duration(seconds: 25));
-      return r.statusCode >= 200 && r.statusCode < 300;
-    } catch (_) {
-      return false;
-    }
+    final r = await postWithWakeup(
+      Uri.parse('$_baseUrl/api/orchards/location'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'orchard': selected, 'lat': lat, 'lon': lon}),
+    );
+    return r != null && r.statusCode >= 200 && r.statusCode < 300;
   }
 
   Map<String, dynamic> _demoDashboard(String orchard) => {
@@ -123,70 +163,51 @@ class FarmApi {
         'risk_score': 0,
         'profit': 0,
         'weather_source': 'demo',
-        'weather_warning': '서버 또는 실제 기상 데이터에 연결되지 않았습니다.',
+        'weather_warning': '운영 서버 연결에 실패했습니다. 서버가 깨어나는 중이면 잠시 후 다시 시도하세요.',
         'tasks': [],
         'best_work_times': []
       };
 
   Future<Map<String, dynamic>> dashboard(String orchard) async {
     final selected = _selected(orchard);
-    try {
-      final u = Uri.parse('$_baseUrl/api/dashboard').replace(queryParameters: {'orchard': selected});
-      final r = await http.get(u).timeout(const Duration(seconds: 25));
-      if (r.statusCode == 200) return Map<String, dynamic>.from(jsonDecode(r.body));
-    } catch (_) {}
+    final u = Uri.parse('$_baseUrl/api/dashboard').replace(queryParameters: {'orchard': selected});
+    final r = await getWithWakeup(u);
+    if (r?.statusCode == 200) return Map<String, dynamic>.from(jsonDecode(r!.body));
     return _demoDashboard(selected);
   }
 
   Future<List<dynamic>> orchards() async {
-    try {
-      final r = await http.get(Uri.parse('$_baseUrl/api/orchards')).timeout(const Duration(seconds: 20));
-      if (r.statusCode == 200) return jsonDecode(r.body);
-    } catch (_) {}
+    final r = await getWithWakeup(Uri.parse('$_baseUrl/api/orchards'));
+    if (r?.statusCode == 200) return jsonDecode(r!.body);
     return [];
   }
 
   Future<List<dynamic>> tasks(String orchard) async {
     final selected = _selected(orchard);
-    try {
-      final u = Uri.parse('$_baseUrl/api/tasks').replace(queryParameters: {'orchard': selected});
-      final r = await http.get(u).timeout(const Duration(seconds: 20));
-      if (r.statusCode == 200) return jsonDecode(r.body);
-    } catch (_) {}
+    final u = Uri.parse('$_baseUrl/api/tasks').replace(queryParameters: {'orchard': selected});
+    final r = await getWithWakeup(u);
+    if (r?.statusCode == 200) return jsonDecode(r!.body);
     return [];
   }
 
   Future<bool> addTask({required String orchard, required String title, String category = '일반', int priority = 2, String? scheduledAt}) async {
     final selected = _selected(orchard);
-    try {
-      final r = await http
-          .post(Uri.parse('$_baseUrl/api/tasks'), headers: {'Content-Type': 'application/json'}, body: jsonEncode({
-        'orchard': selected,
-        'title': title,
-        'category': category,
-        'priority': priority,
-        'scheduled_at': scheduledAt,
-      })).timeout(const Duration(seconds: 20));
-      return r.statusCode >= 200 && r.statusCode < 300;
-    } catch (_) {
-      return false;
-    }
+    final r = await postWithWakeup(
+      Uri.parse('$_baseUrl/api/tasks'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'orchard': selected, 'title': title, 'category': category, 'priority': priority, 'scheduled_at': scheduledAt}),
+    );
+    return r != null && r.statusCode >= 200 && r.statusCode < 300;
   }
 
   Future<bool> completeTask(int taskId) async {
-    try {
-      final r = await http.post(Uri.parse('$_baseUrl/api/tasks/$taskId/complete')).timeout(const Duration(seconds: 20));
-      return r.statusCode >= 200 && r.statusCode < 300;
-    } catch (_) {
-      return false;
-    }
+    final r = await postWithWakeup(Uri.parse('$_baseUrl/api/tasks/$taskId/complete'));
+    return r != null && r.statusCode >= 200 && r.statusCode < 300;
   }
 
   Future<Map<String, dynamic>> coach() async {
-    try {
-      final r = await http.get(Uri.parse('$_baseUrl/api/coach')).timeout(const Duration(seconds: 20));
-      if (r.statusCode == 200) return Map<String, dynamic>.from(jsonDecode(r.body));
-    } catch (_) {}
+    final r = await getWithWakeup(Uri.parse('$_baseUrl/api/coach'));
+    if (r?.statusCode == 200) return Map<String, dynamic>.from(jsonDecode(r!.body));
     return {
       'offline_mode': true,
       'best_hours': [
@@ -199,18 +220,13 @@ class FarmApi {
   }
 
   Future<Map<String, dynamic>> survivorAdvice(Map<String, dynamic> data) async {
-    final payload = Map<String, dynamic>.from(data);
-    payload['orchard'] = OrchardSelection.name;
-    try {
-      final r = await http
-          .post(Uri.parse('$_baseUrl/api/weeds/survivor-advice'), headers: {'Content-Type': 'application/json'}, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 20));
-      if (r.statusCode == 200) return Map<String, dynamic>.from(jsonDecode(r.body));
-    } catch (_) {}
-    return {
-      'offline_mode': true,
-      'possible_causes': ['서버 연결 실패'],
-      'actions': ['네트워크 연결 후 다시 시도하세요.']
-    };
+    final payload = Map<String, dynamic>.from(data)..['orchard'] = OrchardSelection.name;
+    final r = await postWithWakeup(
+      Uri.parse('$_baseUrl/api/weeds/survivor-advice'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    );
+    if (r?.statusCode == 200) return Map<String, dynamic>.from(jsonDecode(r!.body));
+    return {'offline_mode': true, 'possible_causes': ['서버 연결 실패'], 'actions': ['네트워크 연결 후 다시 시도하세요.']};
   }
 }
